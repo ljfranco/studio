@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { GeistSans } from 'next/font/google'; // Adjusted import name
+import { Inter } from 'next/font/google'; // Use a standard Google Font like Inter
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { FirebaseProvider } from '@/context/FirebaseContext';
@@ -7,12 +7,11 @@ import ReactQueryProvider from '@/context/ReactQueryProvider'; // Renamed for cl
 import AuthProvider from '@/context/AuthContext'; // Added AuthProvider
 import { Navbar } from '@/components/layout/Navbar'; // Import Navbar
 
-const geistSans = GeistSans({ // Corrected font import usage
-  variable: '--font-geist-sans',
+// Initialize the Inter font
+const inter = Inter({
+  variable: '--font-inter', // Define a CSS variable for the font
   subsets: ['latin'],
 });
-
-// Removed GeistMono as it's not explicitly requested in the style guide
 
 export const metadata: Metadata = {
   title: 'Cuenta Clara',
@@ -26,7 +25,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es"> {/* Set language to Spanish */}
-      <body className={`${geistSans.variable} antialiased`}>
+      {/* Apply the font variable to the body */}
+      <body className={`${inter.variable} antialiased`}>
         <ReactQueryProvider>
           <FirebaseProvider>
             <AuthProvider> {/* Wrap with AuthProvider */}
