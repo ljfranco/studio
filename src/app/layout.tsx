@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google'; // Use a standard Google Font like Inter
+import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { FirebaseProvider } from '@/context/FirebaseContext';
@@ -24,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es"> {/* Set language to Spanish */}
+    <html lang="es">
       {/* Apply the font variable to the body */}
       <body className={`${inter.variable} antialiased`}>
         <ReactQueryProvider>
