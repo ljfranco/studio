@@ -39,23 +39,31 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, showUse
           </TableRow>
         </TableHeader>
         <TableBody>
-          {transactions.map((transaction) => (
-            <TableRow key={transaction.id}>
-              <TableCell className="whitespace-nowrap">
-                {format(transaction.timestamp, 'dd MMM yyyy, HH:mm', { locale: es })}
-              </TableCell>
-               {showUserName && <TableCell>{transaction.userName || 'N/A'}</TableCell>}
-              <TableCell>
-                <Badge variant={transaction.type === 'purchase' ? 'destructive' : 'default'} className="capitalize">
-                  {transaction.type === 'purchase' ? 'Compra' : 'Pago'}
-                </Badge>
-              </TableCell>
-              <TableCell>{transaction.description}</TableCell>
-              <TableCell className={`text-right font-medium ${transaction.type === 'purchase' ? 'text-destructive' : 'text-green-600'}`}>
-                {formatCurrency(transaction.amount)}
-              </TableCell>
-            </TableRow>
-          ))}
+          {transactions.map((transaction) => {
+            const isPurchase = transaction.type === 'purchase';
+            const sign = isPurchase ? '-' : '+';
+            const amountColor = isPurchase ? 'text-destructive' : 'text-primary'; // Use primary for payments like balance
+            // Format the absolute amount and prepend the sign
+            const formattedAmount = `${sign} ${formatCurrency(transaction.amount)}`;
+
+            return (
+              <TableRow key={transaction.id}>
+                <TableCell className="whitespace-nowrap">
+                  {format(transaction.timestamp, 'dd MMM yyyy, HH:mm', { locale: es })}
+                </TableCell>
+                 {showUserName && <TableCell>{transaction.userName || 'N/A'}</TableCell>}
+                <TableCell>
+                  <Badge variant={isPurchase ? 'destructive' : 'default'} className="capitalize">
+                    {isPurchase ? 'Compra' : 'Pago'}
+                  </Badge>
+                </TableCell>
+                <TableCell>{transaction.description}</TableCell>
+                <TableCell className={`text-right font-medium ${amountColor}`}>
+                  {formattedAmount}
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
