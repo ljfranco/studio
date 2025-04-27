@@ -41,10 +41,9 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, showUse
         <TableBody>
           {transactions.map((transaction) => {
             const isPurchase = transaction.type === 'purchase';
-            const sign = isPurchase ? '-' : '+';
             const amountColor = isPurchase ? 'text-destructive' : 'text-primary'; // Use primary for payments like balance
-            // Format the absolute amount and prepend the sign
-            const formattedAmount = `${sign} ${formatCurrency(transaction.amount)}`;
+            // Format the absolute amount
+            const formattedAmount = `${formatCurrency(transaction.amount)}`;
 
             return (
               <TableRow key={transaction.id}>
