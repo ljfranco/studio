@@ -65,14 +65,14 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
     resolver: zodResolver(transactionSchema),
     defaultValues: {
       description: '',
-      amount: undefined,
+      amount: '' as any, // Initialize with empty string to avoid uncontrolled input warning
     },
   });
 
   // Reset form when dialog opens or type changes
   useEffect(() => {
     if (isOpen) {
-      form.reset({ description: '', amount: undefined });
+      form.reset({ description: '', amount: '' as any }); // Reset with empty string
     }
   }, [isOpen, form]);
 
@@ -95,7 +95,8 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
     // Set default description if empty
     const description = values.description?.trim() || (type === 'purchase' ? 'Compra' : 'Pago');
     const amount = values.amount;
-    const transactionAmount = type === 'purchase' ? -amount : amount; // Payments decrease balance
+    // Purchases *decrease* the balance, payments *increase* it.
+    const transactionAmount = type === 'purchase' ? -amount : amount;
 
     try {
       // Use Firestore transaction to ensure atomicity
@@ -136,7 +137,7 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
           userId: finalTargetUserId,
           type: type,
           description: description, // Use the potentially defaulted description
-          amount: amount, // Store the absolute amount
+          amount: amount, // Store the absolute amount (positive value)
           balanceAfter: newBalance, // Store balance after transaction for history
           timestamp: serverTimestamp(),
           addedBy: user?.uid, // Record who added the transaction (could be admin or the user themselves)
@@ -206,7 +207,8 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
                 <FormItem>
                   <FormLabel>{amountLabel}</FormLabel>
                   <FormControl>
-                    <Input type="number" placeholder="0.00" {...field} step="0.01" />
+                    {/* Ensure field.value is not undefined */}
+                    <Input type="number" placeholder="0.00" {...field} step="0.01" value={field.value ?? ''}/>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
