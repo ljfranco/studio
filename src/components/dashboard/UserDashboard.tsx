@@ -3,12 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useFirebase } from '@/context/FirebaseContext';
-import { doc, getDoc, collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
+import { doc, collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { PlusCircle, DollarSign } from 'lucide-react';
+// Buttons and Dialogs are removed as users cannot add transactions
+// import { Button } from '@/components/ui/button';
+// import { PlusCircle, DollarSign } from 'lucide-react';
 import TransactionList from './TransactionList';
-import AddTransactionDialog from './AddTransactionDialog';
+// import AddTransactionDialog from './AddTransactionDialog';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { formatCurrency } from '@/lib/utils'; // Import formatting utility
 
@@ -18,8 +19,9 @@ const UserDashboard: React.FC = () => {
   const [balance, setBalance] = useState<number | null>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loadingData, setLoadingData] = useState(true);
-  const [isAddPurchaseOpen, setIsAddPurchaseOpen] = useState(false);
-  const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
+  // Remove state for dialogs
+  // const [isAddPurchaseOpen, setIsAddPurchaseOpen] = useState(false);
+  // const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -40,8 +42,6 @@ const UserDashboard: React.FC = () => {
         console.warn("User document not found for balance.");
         setBalance(0); // Default to 0 if document doesn't exist
       }
-      // Consider data loaded once balance is fetched (or attempted)
-       // setLoadingData(false); // Moved loading state update lower
     }, (error) => {
         console.error("Error fetching user balance:", error);
         setBalance(0); // Default on error
@@ -98,6 +98,8 @@ const UserDashboard: React.FC = () => {
             </CardContent>
        </Card>
 
+      {/* Remove Add Purchase and Add Payment buttons for regular users */}
+      {/*
       <div className="flex flex-col sm:flex-row gap-4">
         <Button onClick={() => setIsAddPurchaseOpen(true)} className="flex-1 bg-destructive hover:bg-destructive/90 text-destructive-foreground">
           <PlusCircle className="mr-2 h-4 w-4" /> Agregar Compra
@@ -106,6 +108,7 @@ const UserDashboard: React.FC = () => {
           <DollarSign className="mr-2 h-4 w-4" /> Registrar Pago
         </Button>
       </div>
+      */}
 
       <Card className="shadow-md">
         <CardHeader>
@@ -117,6 +120,8 @@ const UserDashboard: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* Remove AddTransactionDialog instances */}
+      {/*
       <AddTransactionDialog
         isOpen={isAddPurchaseOpen}
         onClose={() => setIsAddPurchaseOpen(false)}
@@ -127,6 +132,7 @@ const UserDashboard: React.FC = () => {
         onClose={() => setIsAddPaymentOpen(false)}
         type="payment"
       />
+      */}
     </div>
   );
 };
