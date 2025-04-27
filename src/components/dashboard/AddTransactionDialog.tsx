@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useAuth } from '@/context/AuthContext';
 import { useFirebase } from '@/context/FirebaseContext';
-import { collection, addDoc, serverTimestamp, doc, runTransaction, getDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, runTransaction, getDoc, setDoc } from 'firebase/firestore';
 import {
   Dialog,
   DialogContent,
@@ -30,10 +30,11 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
+// Make description optional and allow empty string
 const transactionSchema = z.object({
-  description: z.string().min(3, { message: 'La descripción debe tener al menos 3 caracteres.' }).max(100, { message: 'La descripción no puede exceder los 100 caracteres.' }),
+  description: z.string().max(100, { message: 'La descripción no puede exceder los 100 caracteres.' }).optional(),
   amount: z.preprocess(
-    (val) => Number(String(val).replace(/[^0-9.-]+/g,"")), // Clean input before validation
+    (val) => Number(String(val).replace(/[^0-9.-]+/g, "")), // Clean input before validation
     z.number().positive({ message: 'El monto debe ser un número positivo.' })
   ),
 });
@@ -49,12 +50,12 @@ interface AddTransactionDialogProps {
 }
 
 const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
-    isOpen,
-    onClose,
-    type,
-    targetUserId,
-    isAdminAction = false
- }) => {
+  isOpen,
+  onClose,
+  type,
+  targetUserId,
+  isAdminAction = false
+}) => {
   const { user } = useAuth(); // Get current logged-in user (could be admin or regular user)
   const { db } = useFirebase();
   const { toast } = useToast();
@@ -68,8 +69,8 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
     },
   });
 
-   // Reset form when dialog opens or type changes
-   useEffect(() => {
+  // Reset form when dialog opens or type changes
+  useEffect(() => {
     if (isOpen) {
       form.reset({ description: '', amount: 0 });
     }
@@ -91,39 +92,58 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
       return;
     }
 
+    // Set default description if empty
+    const description = values.description?.trim() || (type === 'purchase' ? 'Compra' : 'Pago');
     const amount = values.amount;
     const transactionAmount = type === 'purchase' ? amount : -amount; // Payments decrease balance
 
     try {
-       // Use Firestore transaction to ensure atomicity
-       await runTransaction(db, async (transaction) => {
-            const userDocRef = doc(db, 'users', finalTargetUserId);
-            const userDoc = await transaction.get(userDocRef);
+      // Use Firestore transaction to ensure atomicity
+      await runTransaction(db, async (transaction) => {
+        const userDocRef = doc(db, 'users', finalTargetUserId);
+        const userDoc = await transaction.get(userDocRef);
 
-            if (!userDoc.exists()) {
-                throw new Error("User document does not exist!");
-            }
+        let currentBalance = 0;
+        if (!userDoc.exists()) {
+          // Create the user document if it doesn't exist (e.g., first transaction)
+          // Use setDoc within the transaction to create it
+          const initialUserData = {
+            uid: finalTargetUserId,
+            // Attempt to get name/email from auth, might not be available server-side
+            name: user?.displayName || 'Usuario Nuevo',
+            email: user?.email || '',
+            role: 'user', // Default role for new users
+            balance: 0,
+            createdAt: serverTimestamp(),
+          };
+          transaction.set(userDocRef, initialUserData);
+          console.log(`Created new user document for ${finalTargetUserId}`);
+          currentBalance = 0; // Balance starts at 0
+        } else {
+           currentBalance = userDoc.data()?.balance ?? 0;
+        }
 
-            const currentBalance = userDoc.data()?.balance ?? 0;
-            const newBalance = currentBalance + transactionAmount;
 
-            // 1. Update user's balance
-            transaction.update(userDocRef, { balance: newBalance });
+        const newBalance = currentBalance + transactionAmount;
 
-            // 2. Add transaction record
-            const transactionsColRef = collection(db, 'transactions');
-            await transaction.set(doc(transactionsColRef), { // Use transaction.set with a new doc ref
-                 userId: finalTargetUserId,
-                 type: type,
-                 description: values.description,
-                 amount: amount, // Store the absolute amount
-                 balanceAfter: newBalance, // Store balance after transaction for history
-                 timestamp: serverTimestamp(),
-                 addedBy: user?.uid, // Record who added the transaction (could be admin or the user themselves)
-                 addedByName: user?.displayName || user?.email, // Optional: store name/email of adder
-                 isAdminAction: isAdminAction, // Flag if added by admin
-            });
-       });
+        // 1. Update user's balance
+        transaction.update(userDocRef, { balance: newBalance });
+
+        // 2. Add transaction record
+        const transactionsColRef = collection(db, 'transactions');
+        const newTransactionRef = doc(transactionsColRef); // Generate a new ref for the transaction
+        transaction.set(newTransactionRef, { // Use transaction.set with the new doc ref
+          userId: finalTargetUserId,
+          type: type,
+          description: description, // Use the potentially defaulted description
+          amount: amount, // Store the absolute amount
+          balanceAfter: newBalance, // Store balance after transaction for history
+          timestamp: serverTimestamp(),
+          addedBy: user?.uid, // Record who added the transaction (could be admin or the user themselves)
+          addedByName: user?.displayName || user?.email, // Optional: store name/email of adder
+          isAdminAction: isAdminAction, // Flag if added by admin
+        });
+      });
 
 
       toast({
@@ -135,7 +155,7 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
       console.error("Error adding transaction:", error);
       toast({
         title: 'Error',
-        description: `No se pudo ${type === 'purchase' ? 'agregar la compra' : 'registrar el pago'}. Intenta de nuevo.`,
+        description: `No se pudo ${type === 'purchase' ? 'agregar la compra' : 'registrar el pago'}. Intenta de nuevo. Error: ${error instanceof Error ? error.message : String(error)}`,
         variant: 'destructive',
       });
     } finally {
@@ -147,7 +167,7 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
   const dialogDescription = type === 'purchase'
     ? 'Ingresa los detalles de la compra realizada.'
     : 'Ingresa los detalles del pago realizado.';
-   const amountLabel = type === 'purchase' ? 'Monto de la Compra' : 'Monto del Pago';
+  const amountLabel = type === 'purchase' ? 'Monto de la Compra' : 'Monto del Pago';
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -155,9 +175,9 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
         <DialogHeader>
           <DialogTitle>{dialogTitle}</DialogTitle>
           <DialogDescription>{dialogDescription}</DialogDescription>
-            {isAdminAction && targetUserId && (
-                <p className="text-sm text-muted-foreground pt-2">Estás registrando esto para otro usuario.</p>
-            )}
+          {isAdminAction && targetUserId && (
+            <p className="text-sm text-muted-foreground pt-2">Estás registrando esto para otro usuario.</p>
+          )}
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
@@ -166,13 +186,14 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Descripción</FormLabel>
+                  {/* Update label to indicate optional */}
+                  <FormLabel>Descripción (Opcional)</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder={type === 'purchase' ? 'Ej: Pan, Leche...' : 'Ej: Pago quincena...'}
+                      placeholder={type === 'purchase' ? 'Ej: Pan, Leche... (Predeterminado: Compra)' : 'Ej: Pago quincena... (Predeterminado: Pago)'}
                       {...field}
                       rows={3}
-                     />
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -191,16 +212,16 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
                 </FormItem>
               )}
             />
-             <DialogFooter>
-               <DialogClose asChild>
-                   <Button type="button" variant="outline" disabled={isLoading}>
-                     Cancelar
-                   </Button>
-               </DialogClose>
-               <Button type="submit" disabled={isLoading} className="bg-primary hover:bg-primary/90">
-                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Guardar'}
-               </Button>
-             </DialogFooter>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="outline" disabled={isLoading}>
+                  Cancelar
+                </Button>
+              </DialogClose>
+              <Button type="submit" disabled={isLoading} className="bg-primary hover:bg-primary/90">
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Guardar'}
+              </Button>
+            </DialogFooter>
           </form>
         </Form>
       </DialogContent>
