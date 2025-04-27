@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import TransactionList from '@/components/dashboard/TransactionList'; // Re-use TransactionList
 import EditTransactionDialog from './EditTransactionDialog'; // Import Edit Dialog
 import CancelTransactionDialog from './CancelTransactionDialog'; // Import Cancel Dialog
+import RestoreTransactionDialog from './RestoreTransactionDialog'; // Import Restore Dialog
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
   const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [isRestoreDialogOpen, setIsRestoreDialogOpen] = useState(false); // State for restore dialog
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [isRecalculating, setIsRecalculating] = useState(false);
 
@@ -175,12 +177,20 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
     setIsCancelDialogOpen(true);
   };
 
+   const handleRestore = (transaction: Transaction) => {
+    if (!transaction.isCancelled) return; // Should not happen if button is shown correctly
+    setSelectedTransaction(transaction);
+    setIsRestoreDialogOpen(true);
+  };
+
+
   const handleDialogClose = () => {
     setIsEditDialogOpen(false);
     setIsCancelDialogOpen(false);
+    setIsRestoreDialogOpen(false); // Close restore dialog as well
     setSelectedTransaction(null);
     // Optional: Trigger recalculation immediately after closing a dialog that modifies data
-    // recalculateBalance(); // Consider if this is needed or handled by Firestore listener
+    // recalculateBalance(); // Handled by onSuccessCallback in dialogs now
   };
 
   // --- Render Logic ---
@@ -253,6 +263,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
              isAdminView={true} // Enable admin actions
              onEdit={handleEdit}
              onCancel={handleCancel}
+             onRestore={handleRestore} // Pass restore handler
           />
         </CardContent>
       </Card>
@@ -260,7 +271,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
        {/* Dialogs */}
        <AddTransactionDialog
             isOpen={isAddPurchaseOpen}
-            onClose={() => { setIsAddPurchaseOpen(false); /* Optional: recalculateBalance(); */ }}
+            onClose={() => { setIsAddPurchaseOpen(false); }}
             type="purchase"
             targetUserId={userId}
             isAdminAction={true}
@@ -268,7 +279,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
        />
        <AddTransactionDialog
             isOpen={isAddPaymentOpen}
-            onClose={() => { setIsAddPaymentOpen(false); /* Optional: recalculateBalance(); */ }}
+            onClose={() => { setIsAddPaymentOpen(false);}}
             type="payment"
             targetUserId={userId}
             isAdminAction={true}
@@ -290,6 +301,13 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
                 transaction={selectedTransaction}
                 adminUser={adminUser}
                 onSuccessCallback={recalculateBalance} // Recalculate after cancelling
+            />
+            <RestoreTransactionDialog
+                isOpen={isRestoreDialogOpen}
+                onClose={handleDialogClose}
+                transaction={selectedTransaction}
+                adminUser={adminUser}
+                onSuccessCallback={recalculateBalance} // Recalculate after restoring
             />
         </>
        )}
