@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useAuth } from '@/context/AuthContext';
 import { useFirebase } from '@/context/FirebaseContext';
-import { collection, addDoc, serverTimestamp, doc, runTransaction, getDoc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, runTransaction, Timestamp, getDoc, setDoc } from 'firebase/firestore'; // Added Timestamp
 import {
   Dialog,
   DialogContent,
@@ -29,6 +29,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import type { Transaction } from '@/types/transaction'; // Import type if needed elsewhere, but not strictly necessary here
 
 // Make description optional and allow empty string
 const transactionSchema = z.object({
@@ -47,6 +48,7 @@ interface AddTransactionDialogProps {
   type: 'purchase' | 'payment';
   targetUserId?: string; // Optional: For admin adding transaction to a specific user
   isAdminAction?: boolean; // Optional: Flag if action is by admin
+  onSuccessCallback?: () => void; // Optional callback on success
 }
 
 const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
@@ -54,7 +56,8 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
   onClose,
   type,
   targetUserId,
-  isAdminAction = false
+  isAdminAction = false,
+  onSuccessCallback
 }) => {
   const { user } = useAuth(); // Get current logged-in user (could be admin or regular user)
   const { db } = useFirebase();
@@ -94,63 +97,58 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
 
     // Set default description if empty
     const description = values.description?.trim() || (type === 'purchase' ? 'Compra' : 'Pago');
-    const amount = values.amount;
-    // Purchases *decrease* the balance, payments *increase* it.
-    const transactionAmount = type === 'purchase' ? -amount : amount;
+    const amount = values.amount; // Amount is always positive from input
+    // The effect on balance depends on the type, but balanceAfter will be calculated later.
 
     try {
-      // Use Firestore transaction to ensure atomicity
+      // Use Firestore transaction (although less critical for adding new, still good practice)
+      const transactionsColRef = collection(db, 'transactions');
+      const newTransactionRef = doc(transactionsColRef); // Generate a new ref first
+
       await runTransaction(db, async (transaction) => {
-        const userDocRef = doc(db, 'users', finalTargetUserId);
-        const userDoc = await transaction.get(userDocRef);
+         const userDocRef = doc(db, 'users', finalTargetUserId);
+         const userDoc = await transaction.get(userDocRef);
 
-        let currentBalance = 0;
-        if (!userDoc.exists()) {
-          // Create the user document if it doesn't exist (e.g., first transaction)
-          // Use setDoc within the transaction to create it
-          const initialUserData = {
-            uid: finalTargetUserId,
-            // Attempt to get name/email from auth, might not be available server-side
-            name: user?.displayName || 'Usuario Nuevo',
-            email: user?.email || '',
-            role: 'user', // Default role for new users
-            balance: 0,
-            createdAt: serverTimestamp(),
-          };
-          transaction.set(userDocRef, initialUserData);
-          console.log(`Created new user document for ${finalTargetUserId}`);
-          currentBalance = 0; // Balance starts at 0
-        } else {
-           currentBalance = userDoc.data()?.balance ?? 0;
-        }
+         if (!userDoc.exists()) {
+             // Option 1: Create user if not exists (as before)
+            // const initialUserData = { /* ... */ };
+            // transaction.set(userDocRef, initialUserData);
 
+            // Option 2: Throw error if admin tries to add to non-existent user
+             if (isAdminAction) {
+                throw new Error(`El usuario con ID ${finalTargetUserId} no existe.`);
+             }
+             // Handle regular user case if needed (maybe create user doc here?)
+             // For now, let's assume admin must ensure user exists or handle creation elsewhere
+             else {
+                 // This case shouldn't happen if users are created on signup
+                 console.warn(`User document missing for non-admin action by ${user?.uid}`);
+                 throw new Error("Error interno al procesar la transacción.");
+             }
+         }
 
-        const newBalance = currentBalance + transactionAmount;
-
-        // 1. Update user's balance
-        transaction.update(userDocRef, { balance: newBalance });
-
-        // 2. Add transaction record
-        const transactionsColRef = collection(db, 'transactions');
-        const newTransactionRef = doc(transactionsColRef); // Generate a new ref for the transaction
-        transaction.set(newTransactionRef, { // Use transaction.set with the new doc ref
-          userId: finalTargetUserId,
-          type: type,
-          description: description, // Use the potentially defaulted description
-          amount: amount, // Store the absolute amount (positive value)
-          balanceAfter: newBalance, // Store balance after transaction for history
-          timestamp: serverTimestamp(),
-          addedBy: user?.uid, // Record who added the transaction (could be admin or the user themselves)
-          addedByName: user?.displayName || user?.email, // Optional: store name/email of adder
-          isAdminAction: isAdminAction, // Flag if added by admin
+         // Add transaction record - balanceAfter will be set during recalculation
+         transaction.set(newTransactionRef, {
+            userId: finalTargetUserId,
+            type: type,
+            description: description,
+            amount: amount, // Store the absolute amount
+            balanceAfter: 0, // Placeholder, will be updated by recalculation
+            timestamp: Timestamp.now(), // Use Firestore Timestamp
+            addedBy: user?.uid,
+            addedByName: user?.displayName || user?.email,
+            isAdminAction: isAdminAction,
+            isCancelled: false, // Initialize cancellation/modification fields
+            isModified: false,
         });
       });
 
 
       toast({
         title: '¡Éxito!',
-        description: `Se ${type === 'purchase' ? 'agregó la compra' : 'registró el pago'} correctamente.`,
+        description: `Se ${type === 'purchase' ? 'agregó la compra' : 'registró el pago'} correctamente. Recalculando saldo...`,
       });
+      onSuccessCallback?.(); // Trigger recalculation
       onClose(); // Close the dialog on success
     } catch (error) {
       console.error("Error adding transaction:", error);
@@ -187,7 +185,6 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  {/* Update label to indicate optional */}
                   <FormLabel>Descripción (Opcional)</FormLabel>
                   <FormControl>
                     <Textarea
@@ -207,7 +204,6 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
                 <FormItem>
                   <FormLabel>{amountLabel}</FormLabel>
                   <FormControl>
-                    {/* Ensure field.value is not undefined */}
                     <Input type="number" placeholder="0.00" {...field} step="0.01" value={field.value ?? ''}/>
                   </FormControl>
                   <FormMessage />
