@@ -14,15 +14,22 @@ export interface Transaction {
 
   // Cancellation fields
   isCancelled?: boolean;
-  cancelledAt?: Timestamp | Date;
-  cancelledBy?: string; // UID of admin who cancelled
-  cancelledByName?: string; // Name/email of admin who cancelled
+  cancelledAt?: Timestamp | Date | null; // Allow null when not cancelled
+  cancelledBy?: string | null; // UID of admin who cancelled
+  cancelledByName?: string | null; // Name/email of admin who cancelled
+  cancellationReason?: string | null; // Optional reason for cancellation
 
   // Modification fields
   isModified?: boolean;
-  modifiedAt?: Timestamp | Date;
-  modifiedBy?: string; // UID of admin who modified
-  modifiedByName?: string; // Name/email of admin who modified
-  modificationReason?: string; // Optional reason for modification
-  originalData?: Omit<Transaction, 'id' | 'originalData' | 'isModified' | 'modifiedAt' | 'modifiedBy' | 'modifiedByName' | 'modificationReason' | 'isCancelled' | 'cancelledAt' | 'cancelledBy' | 'cancelledByName'>; // Store previous state before modification
+  modifiedAt?: Timestamp | Date | null; // Allow null
+  modifiedBy?: string | null; // UID of admin who modified
+  modifiedByName?: string | null; // Name/email of admin who modified
+  modificationReason?: string | null; // Optional reason for modification
+  originalData?: Omit<Transaction, 'id' | 'originalData' | 'isModified' | 'modifiedAt' | 'modifiedBy' | 'modifiedByName' | 'modificationReason' | 'isCancelled' | 'cancelledAt' | 'cancelledBy' | 'cancelledByName' | 'cancellationReason' | 'isRestored' | 'restoredAt' | 'restoredBy' | 'restoredByName'> | null; // Store previous state before modification
+
+  // Restoration fields
+  isRestored?: boolean;
+  restoredAt?: Timestamp | Date | null; // Allow null
+  restoredBy?: string | null; // UID of admin who restored
+  restoredByName?: string | null; // Name/email of admin who restored
 }
