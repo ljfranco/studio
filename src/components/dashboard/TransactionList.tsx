@@ -7,14 +7,14 @@ import { Button } from '@/components/ui/button';
 import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatCurrency, cn } from '@/lib/utils';
-import { Pencil, Trash2, Info } from 'lucide-react';
+import { Pencil, Trash2, Info, RotateCcw } from 'lucide-react'; // Added RotateCcw for Restore
 import type { Transaction } from '@/types/transaction'; // Import the updated type
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"; // Import Popover
+
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -22,6 +22,7 @@ interface TransactionListProps {
   isAdminView?: boolean; // Prop to indicate if viewed by admin
   onEdit?: (transaction: Transaction) => void; // Callback for editing
   onCancel?: (transaction: Transaction) => void; // Callback for cancelling
+  onRestore?: (transaction: Transaction) => void; // Callback for restoring
 }
 
 // Helper function to convert Firestore Timestamp or Date to Date
@@ -37,14 +38,14 @@ const TransactionList: React.FC<TransactionListProps> = ({
   showUserName = false,
   isAdminView = false,
   onEdit,
-  onCancel
+  onCancel,
+  onRestore
 }) => {
   if (transactions.length === 0) {
     return <p className="text-center text-muted-foreground">No hay movimientos registrados.</p>;
   }
 
   return (
-    <TooltipProvider>
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
@@ -67,6 +68,8 @@ const TransactionList: React.FC<TransactionListProps> = ({
               const transactionDate = getDate(transaction.timestamp);
               const modifiedDate = transaction.modifiedAt ? getDate(transaction.modifiedAt) : null;
               const cancelledDate = transaction.cancelledAt ? getDate(transaction.cancelledAt) : null;
+              const restoredDate = transaction.restoredAt ? getDate(transaction.restoredAt) : null; // Added restoredDate
+
 
               // Determine text color based on transaction type if not cancelled
               const amountColor = transaction.isCancelled
@@ -99,28 +102,34 @@ const TransactionList: React.FC<TransactionListProps> = ({
                   </TableCell>
                   {isAdminView && (
                     <TableCell className="text-center">
-                      {(transaction.isModified || transaction.isCancelled) && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                             <Info className="h-4 w-4 text-muted-foreground inline-block" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p className="text-xs">
-                              {transaction.isCancelled && cancelledDate && (
+                      {(transaction.isModified || transaction.isCancelled || transaction.isRestored) && ( // Check for restored as well
+                        <Popover>
+                          <PopoverTrigger asChild>
+                             <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary">
+                                 <Info className="h-4 w-4" />
+                             </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto max-w-xs p-2 text-xs" side="top" align="center">
+                               {transaction.isRestored && restoredDate && ( // Display restore info
+                                <>Restaurado {formatDistanceToNow(restoredDate, { locale: es, addSuffix: true })} por {transaction.restoredByName || 'Admin'}<br/></>
+                              )}
+                               {transaction.isCancelled && cancelledDate && (
                                 <>Cancelado {formatDistanceToNow(cancelledDate, { locale: es, addSuffix: true })} por {transaction.cancelledByName || 'Admin'}<br/></>
                               )}
                                {transaction.isModified && modifiedDate && (
                                 <>Modificado {formatDistanceToNow(modifiedDate, { locale: es, addSuffix: true })} por {transaction.modifiedByName || 'Admin'}<br/></>
                               )}
                               {transaction.modificationReason && (
-                                <>Razón: {transaction.modificationReason}<br/></>
+                                <>Razón mod.: {transaction.modificationReason}<br/></>
                               )}
                                 {transaction.isModified && transaction.originalData && (
                                     <>Original: {transaction.originalData.type === 'purchase' ? '-' : '+'}${formatCurrency(transaction.originalData.amount)} ({transaction.originalData.description})</>
                                 )}
-                            </p>
-                          </TooltipContent>
-                        </Tooltip>
+                                {transaction.cancellationReason && ( // Display cancellation reason if present
+                                    <>Razón canc.: {transaction.cancellationReason}</>
+                                )}
+                          </PopoverContent>
+                        </Popover>
                       )}
                     </TableCell>
                   )}
@@ -150,7 +159,16 @@ const TransactionList: React.FC<TransactionListProps> = ({
                           </Button>
                         </>
                       ) : (
-                          <span className="text-xs text-muted-foreground">-</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => onRestore?.(transaction)}
+                            aria-label={`Restaurar ${transaction.description}`}
+                            className="h-7 w-7 text-green-600 hover:text-green-700"
+                            disabled={!onRestore}
+                          >
+                            <RotateCcw className="h-4 w-4" /> {/* Restore Icon */}
+                          </Button>
                       )}
                     </TableCell>
                   )}
@@ -160,7 +178,6 @@ const TransactionList: React.FC<TransactionListProps> = ({
           </TableBody>
         </Table>
       </div>
-    </TooltipProvider>
   );
 };
 

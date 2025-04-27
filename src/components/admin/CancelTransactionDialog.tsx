@@ -15,6 +15,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"; // Use AlertDialog for confirmation
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input'; // Use Input for reason
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import type { Transaction } from '@/types/transaction';
@@ -37,6 +39,7 @@ const CancelTransactionDialog: React.FC<CancelTransactionDialogProps> = ({
   const { db } = useFirebase();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState(''); // State for reason
 
   const handleCancelConfirm = async () => {
     if (!adminUser) {
@@ -67,7 +70,14 @@ const CancelTransactionDialog: React.FC<CancelTransactionDialogProps> = ({
                 cancelledAt: Timestamp.now(),
                 cancelledBy: adminUser.uid,
                 cancelledByName: adminUser.displayName || adminUser.email || 'Admin',
+                cancellationReason: cancellationReason.trim() || null, // Add reason, store null if empty
                 // BalanceAfter will be updated by the recalculateBalance function
+
+                // Clear restoration fields if they exist
+                isRestored: false,
+                restoredAt: null,
+                restoredBy: null,
+                restoredByName: null,
             });
       });
 
@@ -76,6 +86,7 @@ const CancelTransactionDialog: React.FC<CancelTransactionDialogProps> = ({
         title: '¡Éxito!',
         description: 'Transacción cancelada correctamente.',
       });
+      setCancellationReason(''); // Reset reason field
       onSuccessCallback?.(); // Trigger recalculation
       onClose(); // Close the dialog on success
     } catch (error) {
@@ -90,17 +101,36 @@ const CancelTransactionDialog: React.FC<CancelTransactionDialogProps> = ({
     }
   };
 
+   // Reset reason when dialog opens
+   React.useEffect(() => {
+    if (isOpen) {
+      setCancellationReason('');
+    }
+  }, [isOpen]);
+
+
   return (
-    <AlertDialog open={isOpen} onOpenChange={onClose}>
+    <AlertDialog open={isOpen} onOpenChange={(open) => {if (!open) {setCancellationReason(''); onClose();}}}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>¿Confirmar Cancelación?</AlertDialogTitle>
           <AlertDialogDescription>
-            Estás a punto de cancelar la transacción "{transaction.description}" por {transaction.amount}.
+            Estás a punto de cancelar la transacción "{transaction.description}" por {formatCurrency(transaction.amount)}.
             Esta acción marcará la transacción como cancelada y recalculará el saldo. La transacción permanecerá visible en el historial pero tachada.
-            ¿Estás seguro?
+             {transaction.isModified && <span className="block mt-1 text-xs text-orange-600">Nota: Esta transacción fue modificada previamente.</span>}
           </AlertDialogDescription>
         </AlertDialogHeader>
+         <div className="space-y-2">
+              <Label htmlFor="cancellationReason">Razón (Opcional)</Label>
+              <Input
+                id="cancellationReason"
+                value={cancellationReason}
+                onChange={(e) => setCancellationReason(e.target.value)}
+                placeholder="Ej: Error de registro, Duplicado..."
+                disabled={isLoading}
+                maxLength={100} // Add character limit if needed
+              />
+        </div>
         <AlertDialogFooter>
           <AlertDialogCancel onClick={onClose} disabled={isLoading}>Volver</AlertDialogCancel>
           <AlertDialogAction
