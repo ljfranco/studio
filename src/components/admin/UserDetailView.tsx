@@ -1,17 +1,22 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useFirebase } from '@/context/FirebaseContext';
-import { doc, getDoc, collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, orderBy, onSnapshot, runTransaction, Timestamp, writeBatch, getDocs } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import TransactionList from '@/components/dashboard/TransactionList'; // Re-use TransactionList
+import EditTransactionDialog from './EditTransactionDialog'; // Import Edit Dialog
+import CancelTransactionDialog from './CancelTransactionDialog'; // Import Cancel Dialog
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, DollarSign, ArrowLeft } from 'lucide-react'; // Added ArrowLeft
+import { PlusCircle, DollarSign, ArrowLeft, RefreshCw } from 'lucide-react'; // Added Icons
 import AddTransactionDialog from '@/components/dashboard/AddTransactionDialog'; // Re-use AddTransactionDialog
 import Link from 'next/link'; // Import Link for back navigation
+import { useToast } from '@/hooks/use-toast';
+import type { Transaction } from '@/types/transaction'; // Import the updated type
+
 
 interface UserDetailViewProps {
   userId: string;
@@ -26,13 +31,19 @@ interface UserData {
 const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
   const { user: adminUser, loading: authLoading, role } = useAuth();
   const { db } = useFirebase();
+  const { toast } = useToast();
   const [userData, setUserData] = useState<UserData | null>(null);
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [isAddPurchaseOpen, setIsAddPurchaseOpen] = useState(false);
   const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [isRecalculating, setIsRecalculating] = useState(false);
 
 
+  // Fetch Data Effect
   useEffect(() => {
     if (!adminUser || role !== 'admin' || !userId) {
       setLoadingData(false);
@@ -43,48 +54,136 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
     let unsubscribeUser: () => void;
     let unsubscribeTransactions: () => void;
 
-    // Fetch specific user data
+    // Fetch specific user data with real-time updates
     const userDocRef = doc(db, 'users', userId);
     unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
-        if (docSnap.exists()) {
-            setUserData(docSnap.data() as UserData);
-        } else {
-            console.warn(`User document not found for ID: ${userId}`);
-            setUserData(null); // Handle case where user might be deleted
-        }
-         // setLoadingData(false); // Moved loading update
-    }, (error) => {
-        console.error("Error fetching user data:", error);
+      if (docSnap.exists()) {
+        setUserData(docSnap.data() as UserData);
+      } else {
+        console.warn(`User document not found for ID: ${userId}`);
         setUserData(null);
-        setLoadingData(false);
+      }
+    }, (error) => {
+      console.error("Error fetching user data:", error);
+      setUserData(null);
+      setLoadingData(false); // Stop loading on error
     });
 
-
-    // Fetch transactions for this specific user
+    // Fetch transactions for this specific user with real-time updates
     const transactionsColRef = collection(db, 'transactions');
-    const q = query(transactionsColRef, where('userId', '==', userId), orderBy('timestamp', 'desc'));
+    const q = query(transactionsColRef, where('userId', '==', userId), orderBy('timestamp', 'asc')); // Order ASC for recalculation
 
     unsubscribeTransactions = onSnapshot(q, (querySnapshot) => {
-        const fetchedTransactions = querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            timestamp: doc.data().timestamp?.toDate ? doc.data().timestamp.toDate() : new Date()
-        }));
-        setTransactions(fetchedTransactions);
-        setLoadingData(false); // Set loading false after transactions are fetched
+      const fetchedTransactions = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp // Keep as Timestamp or Date
+      })) as Transaction[];
+      setTransactions(fetchedTransactions.sort((a, b) => { // Sort DESC for display
+          const dateA = a.timestamp instanceof Timestamp ? a.timestamp.toDate() : a.timestamp;
+          const dateB = b.timestamp instanceof Timestamp ? b.timestamp.toDate() : b.timestamp;
+          return dateB.getTime() - dateA.getTime();
+      }));
+      setLoadingData(false); // Set loading false after transactions are fetched
     }, (error) => {
-        console.error("Error fetching user transactions:", error);
-        setTransactions([]);
-        setLoadingData(false);
+      console.error("Error fetching user transactions:", error);
+      setTransactions([]);
+      setLoadingData(false);
     });
 
-
     return () => {
-        if (unsubscribeUser) unsubscribeUser();
-        if (unsubscribeTransactions) unsubscribeTransactions();
+      if (unsubscribeUser) unsubscribeUser();
+      if (unsubscribeTransactions) unsubscribeTransactions();
     };
   }, [adminUser, role, db, userId]);
 
+
+  // --- Recalculate Balance Logic ---
+   const recalculateBalance = useCallback(async () => {
+        if (!userId || !db || !adminUser || role !== 'admin') return;
+
+        setIsRecalculating(true);
+        console.log(`Recalculating balance for user: ${userId}`);
+
+        try {
+            // Fetch all transactions ordered chronologically
+            const transactionsColRef = collection(db, 'transactions');
+            const q = query(transactionsColRef, where('userId', '==', userId), orderBy('timestamp', 'asc'));
+            const querySnapshot = await getDocs(q); // Use getDocs for one-time fetch during recalculation
+
+            let currentBalance = 0;
+            const batch = writeBatch(db); // Use a batch for efficient updates
+
+            querySnapshot.forEach((docSnap) => {
+                const transaction = { id: docSnap.id, ...docSnap.data() } as Transaction;
+                let transactionAmount = 0;
+
+                // Only include non-cancelled transactions in balance calculation
+                if (!transaction.isCancelled) {
+                     // Original amount stored is always positive
+                    transactionAmount = transaction.type === 'purchase' ? -transaction.amount : transaction.amount;
+                }
+
+                currentBalance += transactionAmount;
+
+                // Update the balanceAfter field in the transaction document if it changed
+                if (transaction.balanceAfter !== currentBalance) {
+                   console.log(`Updating transaction ${transaction.id}: Old BalanceAfter ${transaction.balanceAfter}, New BalanceAfter ${currentBalance}`);
+                   batch.update(docSnap.ref, { balanceAfter: currentBalance });
+                } else {
+                  console.log(`Transaction ${transaction.id} BalanceAfter is correct: ${currentBalance}`);
+                }
+            });
+
+             // Get the user document reference
+            const userDocRef = doc(db, 'users', userId);
+
+            // Update the user's final balance
+            console.log(`Final calculated balance: ${currentBalance}. Updating user document.`);
+            batch.update(userDocRef, { balance: currentBalance });
+
+
+            // Commit the batch updates
+            await batch.commit();
+
+            toast({
+                title: "Éxito",
+                description: "Saldo y movimientos recalculados correctamente.",
+            });
+            console.log("Recalculation complete.");
+
+        } catch (error) {
+            console.error("Error recalculating balance:", error);
+            toast({
+                title: "Error",
+                description: `No se pudo recalcular el saldo. ${error instanceof Error ? error.message : String(error)}`,
+                variant: "destructive",
+            });
+        } finally {
+            setIsRecalculating(false);
+        }
+    }, [userId, db, toast, adminUser, role]);
+
+  // --- Action Handlers ---
+  const handleEdit = (transaction: Transaction) => {
+    setSelectedTransaction(transaction);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleCancel = (transaction: Transaction) => {
+    setSelectedTransaction(transaction);
+    setIsCancelDialogOpen(true);
+  };
+
+  const handleDialogClose = () => {
+    setIsEditDialogOpen(false);
+    setIsCancelDialogOpen(false);
+    setSelectedTransaction(null);
+    // Optional: Trigger recalculation immediately after closing a dialog that modifies data
+    // recalculateBalance(); // Consider if this is needed or handled by Firestore listener
+  };
+
+  // --- Render Logic ---
   if (authLoading || loadingData) {
     return <div className="flex justify-center items-center h-[calc(100vh-10rem)]"><LoadingSpinner size="lg" /></div>;
   }
@@ -108,11 +207,18 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
 
   return (
     <div className="space-y-6">
-      <Link href="/admin" passHref>
-        <Button variant="outline" className="mb-4">
-           <ArrowLeft className="mr-2 h-4 w-4" /> Volver al listado
-        </Button>
-      </Link>
+        <div className="flex justify-between items-center mb-4">
+            <Link href="/admin" passHref>
+                <Button variant="outline">
+                <ArrowLeft className="mr-2 h-4 w-4" /> Volver al listado
+                </Button>
+            </Link>
+             <Button onClick={recalculateBalance} variant="outline" disabled={isRecalculating}>
+                {isRecalculating ? <LoadingSpinner size="sm" className="mr-2" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                Recalcular Saldo
+             </Button>
+        </div>
+
 
       <Card className="shadow-md">
         <CardHeader>
@@ -121,7 +227,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
         </CardHeader>
         <CardContent>
           <p className={`text-3xl font-bold ${userData.balance < 0 ? 'text-destructive' : 'text-primary'}`}>
-            Saldo: {formatCurrency(userData.balance)}
+             Saldo: {formatCurrency(userData.balance)}
           </p>
         </CardContent>
       </Card>
@@ -141,25 +247,52 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
           <CardDescription>Últimas compras y pagos de {userData.name}.</CardDescription>
         </CardHeader>
         <CardContent>
-          <TransactionList transactions={transactions} showUserName={false} />
+          <TransactionList
+             transactions={transactions}
+             showUserName={false}
+             isAdminView={true} // Enable admin actions
+             onEdit={handleEdit}
+             onCancel={handleCancel}
+          />
         </CardContent>
       </Card>
 
-       {/* Re-use the dialog, passing the specific userId */}
-      <AddTransactionDialog
-        isOpen={isAddPurchaseOpen}
-        onClose={() => setIsAddPurchaseOpen(false)}
-        type="purchase"
-        targetUserId={userId} // Pass the target user ID
-        isAdminAction={true} // Indicate this is an admin action
-      />
-      <AddTransactionDialog
-        isOpen={isAddPaymentOpen}
-        onClose={() => setIsAddPaymentOpen(false)}
-        type="payment"
-        targetUserId={userId} // Pass the target user ID
-        isAdminAction={true} // Indicate this is an admin action
-      />
+       {/* Dialogs */}
+       <AddTransactionDialog
+            isOpen={isAddPurchaseOpen}
+            onClose={() => { setIsAddPurchaseOpen(false); /* Optional: recalculateBalance(); */ }}
+            type="purchase"
+            targetUserId={userId}
+            isAdminAction={true}
+            onSuccessCallback={recalculateBalance} // Recalculate after adding
+       />
+       <AddTransactionDialog
+            isOpen={isAddPaymentOpen}
+            onClose={() => { setIsAddPaymentOpen(false); /* Optional: recalculateBalance(); */ }}
+            type="payment"
+            targetUserId={userId}
+            isAdminAction={true}
+            onSuccessCallback={recalculateBalance} // Recalculate after adding
+       />
+
+       {selectedTransaction && (
+        <>
+            <EditTransactionDialog
+                isOpen={isEditDialogOpen}
+                onClose={handleDialogClose}
+                transaction={selectedTransaction}
+                adminUser={adminUser}
+                onSuccessCallback={recalculateBalance} // Recalculate after editing
+            />
+            <CancelTransactionDialog
+                isOpen={isCancelDialogOpen}
+                onClose={handleDialogClose}
+                transaction={selectedTransaction}
+                adminUser={adminUser}
+                onSuccessCallback={recalculateBalance} // Recalculate after cancelling
+            />
+        </>
+       )}
     </div>
   );
 };
