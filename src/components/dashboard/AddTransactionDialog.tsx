@@ -65,14 +65,14 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
     resolver: zodResolver(transactionSchema),
     defaultValues: {
       description: '',
-      amount: 0,
+      amount: undefined,
     },
   });
 
   // Reset form when dialog opens or type changes
   useEffect(() => {
     if (isOpen) {
-      form.reset({ description: '', amount: 0 });
+      form.reset({ description: '', amount: undefined });
     }
   }, [isOpen, form]);
 
@@ -95,7 +95,7 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
     // Set default description if empty
     const description = values.description?.trim() || (type === 'purchase' ? 'Compra' : 'Pago');
     const amount = values.amount;
-    const transactionAmount = type === 'purchase' ? amount : -amount; // Payments decrease balance
+    const transactionAmount = type === 'purchase' ? -amount : amount; // Payments decrease balance
 
     try {
       // Use Firestore transaction to ensure atomicity

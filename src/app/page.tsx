@@ -18,21 +18,18 @@ export default function Home() {
     return <AuthPage />;
   }
 
-  // Placeholder for role-based routing/component rendering
-  // In a real app, you'd likely fetch the user's role from Firestore
-  // based on their UID after authentication.
-  // For now, we assume a 'user' role if logged in.
-  // The admin view would be accessible via a specific route or determined server-side.
+  // Render AdminDashboard if the user role is 'admin'
+  if (role === 'admin') {
+    return <AdminDashboard />;
+  }
 
-  // Example: Check if the user is an admin (this logic needs implementation)
-  // const isAdmin = role === 'admin'; // Fetch role from Firestore or claims
+  // Render UserDashboard for users with the 'user' role
+  if (role === 'user') {
+    return <UserDashboard />;
+  }
 
-  // For now, default to UserDashboard if logged in
-  // Admin view will be added later via routing e.g., /admin
-   return <UserDashboard />;
- //  if (role === 'admin') {
- //    return <AdminDashboard />; // Render Admin Dashboard if role is admin
- //  } else {
- //    return <UserDashboard />; // Render User Dashboard for regular users
- //  }
+  // Fallback or handle other roles if necessary
+  // For now, default to showing nothing or an error if role is unexpected
+  return <p className="text-center text-muted-foreground">Rol de usuario no reconocido.</p>;
+
 }
