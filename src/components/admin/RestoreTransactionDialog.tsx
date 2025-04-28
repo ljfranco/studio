@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -81,8 +82,9 @@ const RestoreTransactionDialog: React.FC<RestoreTransactionDialogProps> = ({
         title: '¡Éxito!',
         description: 'Transacción restaurada correctamente.',
       });
+      console.log("[Dialog] Calling onSuccessCallback (recalculateBalance)...");
+      onSuccessCallback?.(); // Trigger recalculation BEFORE closing
       onClose(); // Close the dialog on success
-      onSuccessCallback?.(); // Trigger recalculation after closing
     } catch (error) {
       console.error("Error restoring transaction:", error);
       toast({
