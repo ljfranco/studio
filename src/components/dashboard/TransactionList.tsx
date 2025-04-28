@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -55,17 +56,19 @@ const TransactionList: React.FC<TransactionListProps> = ({
               <TableHead>Tipo</TableHead>
               <TableHead>Descripción</TableHead>
               <TableHead className="text-right">Monto</TableHead>
-              <TableHead className="text-right">Saldo Post.</TableHead>
-              {isAdminView && <TableHead className="text-center">Info</TableHead>}
-              {isAdminView && <TableHead className="text-center">Acciones</TableHead>}
+              {/* <TableHead className="text-right">Saldo Post.</TableHead> */}
+              {isAdminView && <TableHead className="text-center w-auto px-2">Info</TableHead>}
+              {isAdminView && <TableHead className="text-center w-auto px-2">Acciones</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {transactions.map((transaction) => {
               const isPurchase = transaction.type === 'purchase';
               // Balance reflects the state *after* this transaction
-              const formattedBalanceAfter = formatCurrency(transaction.balanceAfter);
+              // const formattedBalanceAfter = formatCurrency(transaction.balanceAfter);
               const transactionDate = getDate(transaction.timestamp);
+              const formattedDate = format(transactionDate, 'dd MMM yyyy', { locale: es });
+              const formattedTime = format(transactionDate, 'HH:mm', { locale: es });
               const modifiedDate = transaction.modifiedAt ? getDate(transaction.modifiedAt) : null;
               const cancelledDate = transaction.cancelledAt ? getDate(transaction.cancelledAt) : null;
               const restoredDate = transaction.restoredAt ? getDate(transaction.restoredAt) : null; // Added restoredDate
@@ -84,8 +87,11 @@ const TransactionList: React.FC<TransactionListProps> = ({
 
               return (
                 <TableRow key={transaction.id} className={cn(transaction.isCancelled && "opacity-60")}>
-                  <TableCell className={cn("whitespace-nowrap", transaction.isCancelled && "line-through")}>
-                    {format(transactionDate, 'dd MMM yyyy, HH:mm', { locale: es })}
+                  <TableCell className={cn("whitespace-nowrap text-xs", transaction.isCancelled && "line-through")}>
+                    <div className="flex flex-col">
+                        <span>{formattedDate}</span>
+                        <span className="text-muted-foreground">{formattedTime}</span>
+                    </div>
                   </TableCell>
                   {showUserName && <TableCell className={cn(transaction.isCancelled && "line-through")}>{transaction.addedByName || transaction.addedBy || 'N/A'}</TableCell>}
                   <TableCell>
@@ -97,11 +103,11 @@ const TransactionList: React.FC<TransactionListProps> = ({
                   <TableCell className={cn(`text-right font-medium ${amountColor}`, transaction.isCancelled && "line-through")}>
                     {formattedAmount}
                   </TableCell>
-                   <TableCell className={cn("text-right", transaction.balanceAfter < 0 ? 'text-destructive' : 'text-primary', transaction.isCancelled && "line-through")}>
+                   {/* <TableCell className={cn("text-right", transaction.balanceAfter < 0 ? 'text-destructive' : 'text-primary', transaction.isCancelled && "line-through")}>
                     {formattedBalanceAfter}
-                  </TableCell>
+                  </TableCell> */}
                   {isAdminView && (
-                    <TableCell className="text-center">
+                    <TableCell className="text-center w-auto px-2">
                       {(transaction.isModified || transaction.isCancelled || transaction.isRestored) && ( // Check for restored as well
                         <Popover>
                           <PopoverTrigger asChild>
@@ -134,7 +140,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
                     </TableCell>
                   )}
                   {isAdminView && (
-                    <TableCell className="text-center space-x-1">
+                    <TableCell className="text-center w-auto px-1 space-x-0 sm:space-x-1"> {/* Adjust padding and spacing */}
                       {!transaction.isCancelled ? (
                         <>
                           <Button
