@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useFirebase } from '@/context/FirebaseContext';
-import { collection, query, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore'; // Removed getDocs as it's not needed with onSnapshot
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -38,12 +38,15 @@ const AdminDashboard: React.FC = () => {
         const q = query(usersColRef, orderBy('name'));
 
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
-            const fetchedAccounts = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                name: doc.data().name || 'N/A',
-                email: doc.data().email || 'N/A',
-                balance: doc.data().balance ?? 0,
-            }));
+            const fetchedAccounts = querySnapshot.docs
+                .map(doc => ({
+                    id: doc.id,
+                    name: doc.data().name || 'N/A',
+                    email: doc.data().email || 'N/A',
+                    balance: doc.data().balance ?? 0,
+                }))
+                .filter(account => account.id !== user.uid); // Filter out the admin user
+
             setAccounts(fetchedAccounts);
             setLoadingData(false);
         }, (error) => {
@@ -73,13 +76,13 @@ const AdminDashboard: React.FC = () => {
                 </CardHeader>
                 <CardContent>
                     {accounts.length === 0 && !loadingData ? (
-                         <p className="text-center text-muted-foreground">No hay usuarios registrados.</p>
+                         <p className="text-center text-muted-foreground">No hay otros usuarios registrados.</p>
                     ) : (
                         <Table>
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Nombre</TableHead>
-                                    <TableHead>Email</TableHead>
+                                    {/* <TableHead>Email</TableHead> */}
                                     <TableHead className="text-right">Saldo</TableHead>
                                     <TableHead className="text-center">Acciones</TableHead>
                                 </TableRow>
@@ -88,7 +91,7 @@ const AdminDashboard: React.FC = () => {
                                 {accounts.map((account) => (
                                     <TableRow key={account.id}>
                                         <TableCell className="font-medium">{account.name}</TableCell>
-                                        <TableCell>{account.email}</TableCell>
+                                        {/* <TableCell>{account.email}</TableCell> */}
                                         <TableCell className={`text-right font-semibold ${account.balance < 0 ? 'text-destructive' : 'text-primary'}`}>
                                             {formatCurrency(account.balance)}
                                         </TableCell>
@@ -112,4 +115,5 @@ const AdminDashboard: React.FC = () => {
 };
 
 export default AdminDashboard;
+
 
