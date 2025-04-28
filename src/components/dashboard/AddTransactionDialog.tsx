@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -148,7 +149,8 @@ const AddTransactionDialog: React.FC<AddTransactionDialogProps> = ({
         title: '¡Éxito!',
         description: `Se ${type === 'purchase' ? 'agregó la compra' : 'registró el pago'} correctamente. Recalculando saldo...`,
       });
-      onSuccessCallback?.(); // Trigger recalculation
+      console.log("[Dialog] Calling onSuccessCallback (recalculateBalance)...");
+      onSuccessCallback?.(); // Trigger recalculation BEFORE closing
       onClose(); // Close the dialog on success
     } catch (error) {
       console.error("Error adding transaction:", error);
