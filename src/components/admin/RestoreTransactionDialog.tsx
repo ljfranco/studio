@@ -81,8 +81,8 @@ const RestoreTransactionDialog: React.FC<RestoreTransactionDialogProps> = ({
         title: '¡Éxito!',
         description: 'Transacción restaurada correctamente.',
       });
-      onSuccessCallback?.(); // Trigger recalculation
       onClose(); // Close the dialog on success
+      onSuccessCallback?.(); // Trigger recalculation after closing
     } catch (error) {
       console.error("Error restoring transaction:", error);
       toast({

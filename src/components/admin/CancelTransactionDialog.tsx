@@ -87,8 +87,8 @@ const CancelTransactionDialog: React.FC<CancelTransactionDialogProps> = ({
         description: 'Transacción cancelada correctamente.',
       });
       setCancellationReason(''); // Reset reason field
-      onSuccessCallback?.(); // Trigger recalculation
       onClose(); // Close the dialog on success
+      onSuccessCallback?.(); // Trigger recalculation after closing
     } catch (error) {
       console.error("Error cancelling transaction:", error);
       toast({
@@ -115,7 +115,7 @@ const CancelTransactionDialog: React.FC<CancelTransactionDialogProps> = ({
         <AlertDialogHeader>
           <AlertDialogTitle>¿Confirmar Cancelación?</AlertDialogTitle>
           <AlertDialogDescription>
-            Estás a punto de cancelar la transacción "{transaction.description}" por {formatCurrency(transaction.amount)}.
+            Estás a punto de cancelar la transacción "{transaction.description}" por {transaction.amount}.
             Esta acción marcará la transacción como cancelada y recalculará el saldo. La transacción permanecerá visible en el historial pero tachada.
              {transaction.isModified && <span className="block mt-1 text-xs text-orange-600">Nota: Esta transacción fue modificada previamente.</span>}
           </AlertDialogDescription>

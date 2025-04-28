@@ -163,6 +163,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
             });
         } finally {
             setIsRecalculating(false);
+            console.log("Recalculation finished (finally block).");
         }
     }, [userId, db, toast, adminUser, role]);
 
@@ -189,8 +190,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
     setIsCancelDialogOpen(false);
     setIsRestoreDialogOpen(false); // Close restore dialog as well
     setSelectedTransaction(null);
-    // Optional: Trigger recalculation immediately after closing a dialog that modifies data
-    // recalculateBalance(); // Handled by onSuccessCallback in dialogs now
+    // Recalculation is now handled by the onSuccessCallback in the dialogs
   };
 
   // --- Render Logic ---
@@ -293,21 +293,21 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
                 onClose={handleDialogClose}
                 transaction={selectedTransaction}
                 adminUser={adminUser}
-                onSuccessCallback={recalculateBalance} // Recalculate after editing
+                onSuccessCallback={recalculateBalance} // Pass recalculateBalance here
             />
             <CancelTransactionDialog
                 isOpen={isCancelDialogOpen}
                 onClose={handleDialogClose}
                 transaction={selectedTransaction}
                 adminUser={adminUser}
-                onSuccessCallback={recalculateBalance} // Recalculate after cancelling
+                onSuccessCallback={recalculateBalance} // Pass recalculateBalance here
             />
             <RestoreTransactionDialog
                 isOpen={isRestoreDialogOpen}
                 onClose={handleDialogClose}
                 transaction={selectedTransaction}
                 adminUser={adminUser}
-                onSuccessCallback={recalculateBalance} // Recalculate after restoring
+                onSuccessCallback={recalculateBalance} // Pass recalculateBalance here
             />
         </>
        )}
