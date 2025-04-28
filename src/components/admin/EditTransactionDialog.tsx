@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -155,8 +156,9 @@ const EditTransactionDialog: React.FC<EditTransactionDialogProps> = ({
         title: '¡Éxito!',
         description: 'Transacción modificada correctamente.',
       });
+      console.log("[Dialog] Calling onSuccessCallback (recalculateBalance)...");
+      onSuccessCallback?.(); // Trigger recalculation BEFORE closing
       onClose(); // Close the dialog on success
-      onSuccessCallback?.(); // Trigger recalculation after closing
     } catch (error) {
       console.error("Error editing transaction:", error);
       toast({

@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -87,8 +88,9 @@ const CancelTransactionDialog: React.FC<CancelTransactionDialogProps> = ({
         description: 'Transacción cancelada correctamente.',
       });
       setCancellationReason(''); // Reset reason field
+      console.log("[Dialog] Calling onSuccessCallback (recalculateBalance)...");
+      onSuccessCallback?.(); // Trigger recalculation BEFORE closing
       onClose(); // Close the dialog on success
-      onSuccessCallback?.(); // Trigger recalculation after closing
     } catch (error) {
       console.error("Error cancelling transaction:", error);
       toast({
