@@ -155,8 +155,8 @@ const EditTransactionDialog: React.FC<EditTransactionDialogProps> = ({
         title: '¡Éxito!',
         description: 'Transacción modificada correctamente.',
       });
-      onSuccessCallback?.(); // Trigger recalculation
       onClose(); // Close the dialog on success
+      onSuccessCallback?.(); // Trigger recalculation after closing
     } catch (error) {
       console.error("Error editing transaction:", error);
       toast({
