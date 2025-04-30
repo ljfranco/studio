@@ -90,8 +90,8 @@ const PurchaseForm: React.FC = () => {
         const product = products.find(p => p.id === barcode);
         setSelectedProduct(product || null);
         setSearchText(product ? `${product.name} (${product.id})` : '');
-        // Removed pre-filling price based on distributor
-        setPurchasePrice(''); // Clear price on new product selection
+        // Pre-fill purchase price if available from last purchase
+        setPurchasePrice(product?.lastPurchasePrice?.toString() ?? '');
      };
 
 
@@ -184,7 +184,7 @@ const PurchaseForm: React.FC = () => {
                   if (product) {
                       setSelectedProduct(product);
                       setSearchText(`${product.name} (${product.id})`);
-                      setPurchasePrice('');
+                      setPurchasePrice(product.lastPurchasePrice?.toString() ?? ''); // Pre-fill last purchase price on scan
                       toast({ title: "Código Detectado", description: `${product.name}` });
                   } else {
                        setBarcodeToAdd(scannedId);
@@ -317,10 +317,10 @@ const PurchaseForm: React.FC = () => {
                 const currentQuantity = productSnap.data()?.quantity ?? 0;
                 const newQuantity = currentQuantity + item.quantity;
 
-                // Prepare product update - ONLY update quantity and timestamp
+                // Prepare product update - Update quantity, lastPurchasePrice and timestamp
                 batch.update(productRef, {
                     quantity: newQuantity,
-                    // Removed purchase price update based on distributor
+                    lastPurchasePrice: item.purchasePrice, // Update the last purchase price
                     updatedAt: timestamp, // Update product timestamp
                 });
             }
@@ -365,7 +365,7 @@ const PurchaseForm: React.FC = () => {
          if (newProduct) {
             setSelectedProduct(newProduct);
             setSearchText(`${newProduct.name} (${newProduct.id})`); // Set search text
-            setPurchasePrice(''); // Clear price field
+            setPurchasePrice(newProduct.lastPurchasePrice?.toString() ?? ''); // Set last purchase price if available
          }
 
          setBarcodeToAdd(null); // Clear the barcode to add state
@@ -486,7 +486,7 @@ const PurchaseForm: React.FC = () => {
                  </div>
                  {selectedProduct && (
                     <p className="text-xs text-muted-foreground">
-                        Seleccionado: {selectedProduct.name} - Stock Actual: {selectedProduct.quantity ?? 0}
+                        Seleccionado: {selectedProduct.name} - Stock Actual: {selectedProduct.quantity ?? 0} - Ult. Compra: {formatCurrency(selectedProduct.lastPurchasePrice ?? 0)}
                     </p>
                 )}
             </div>
