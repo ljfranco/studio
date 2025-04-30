@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/form";
 import type { Product } from '@/types/product';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // For camera error
+import { cn } from '@/lib/utils'; // Import cn
 
 
 const productSchema = z.object({
