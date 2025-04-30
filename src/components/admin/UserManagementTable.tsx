@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { UserCheck, UserX, ShieldAlert, Edit } from 'lucide-react'; // Icons for actions
+import { UserCheck, UserX, ShieldAlert, ShieldCheck, ShieldX } from 'lucide-react'; // Added Role Icons
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,6 +21,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"; // Import DropdownMenu
 import { useToast } from '@/hooks/use-toast';
 
 interface UserData {
@@ -42,7 +48,8 @@ const UserManagementTable: React.FC = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
   const [actionType, setActionType] = useState<'enable' | 'disable' | null>(null);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false); // Renamed for clarity
+  const [isUpdatingRole, setIsUpdatingRole] = useState(false); // State for role update
 
   useEffect(() => {
     if (!adminUser || adminRole !== 'admin') {
@@ -52,7 +59,6 @@ const UserManagementTable: React.FC = () => {
 
     setLoadingData(true);
     const usersColRef = collection(db, 'users');
-    // Order by name, you can change this if needed
     const q = query(usersColRef, orderBy('name'));
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
@@ -60,13 +66,13 @@ const UserManagementTable: React.FC = () => {
         .map(doc => ({
           id: doc.id,
           name: doc.data().name || 'N/A',
-          address: doc.data().address || '-', // Handle potentially missing field
-          phone: doc.data().phone || '-', // Handle potentially missing field
+          address: doc.data().address || '-',
+          phone: doc.data().phone || '-',
           email: doc.data().email || 'N/A',
           role: doc.data().role || 'user',
-          isEnabled: doc.data().isEnabled !== undefined ? doc.data().isEnabled : true, // Default to true if missing
+          isEnabled: doc.data().isEnabled !== undefined ? doc.data().isEnabled : true,
         } as UserData))
-        .filter(u => u.id !== adminUser.uid); // Exclude the current admin user
+        .filter(u => u.id !== adminUser.uid);
 
       setUsers(fetchedUsers);
       setLoadingData(false);
@@ -83,7 +89,7 @@ const UserManagementTable: React.FC = () => {
   const handleToggleUserStatus = async () => {
     if (!selectedUser || actionType === null) return;
 
-    setIsUpdating(true);
+    setIsUpdatingStatus(true);
     const newStatus = actionType === 'enable';
     const userDocRef = doc(db, 'users', selectedUser.id);
 
@@ -104,7 +110,31 @@ const UserManagementTable: React.FC = () => {
         variant: 'destructive',
       });
     } finally {
-      setIsUpdating(false);
+      setIsUpdatingStatus(false);
+    }
+  };
+
+   const handleSetRole = async (userId: string, userName: string, newRole: 'user' | 'admin') => {
+    if (isUpdatingRole) return; // Prevent double clicks
+
+    setIsUpdatingRole(true);
+    const userDocRef = doc(db, 'users', userId);
+
+    try {
+      await updateDoc(userDocRef, { role: newRole });
+      toast({
+        title: 'Éxito',
+        description: `Rol de ${userName} actualizado a ${newRole === 'admin' ? 'Administrador' : 'Usuario'}.`,
+      });
+    } catch (error) {
+      console.error(`Error updating role for ${userId}:`, error);
+      toast({
+        title: 'Error',
+        description: `No se pudo actualizar el rol del usuario. ${error instanceof Error ? error.message : ''}`,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUpdatingRole(false);
     }
   };
 
@@ -112,15 +142,6 @@ const UserManagementTable: React.FC = () => {
     setSelectedUser(user);
     setActionType(type);
     setDialogOpen(true);
-  };
-
-   // Placeholder function for role management - to be implemented later
-   const handleManageRoles = (user: UserData) => {
-    toast({
-      title: 'Próximamente',
-      description: `La gestión de roles para ${user.name} estará disponible pronto.`,
-    });
-    // Here you would typically open a dialog or navigate to a role management page
   };
 
 
@@ -131,6 +152,8 @@ const UserManagementTable: React.FC = () => {
   if (!adminUser || adminRole !== 'admin') {
     return <p className="text-center text-destructive">Acceso denegado.</p>;
   }
+
+  const isUpdating = isUpdatingStatus || isUpdatingRole; // Combine loading states
 
   return (
     <>
@@ -150,7 +173,6 @@ const UserManagementTable: React.FC = () => {
                     <TableHead>Nombre</TableHead>
                     <TableHead>Dirección</TableHead>
                     <TableHead>Teléfono</TableHead>
-                    <TableHead>Email</TableHead>
                     <TableHead>Rol</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead className="text-center">Acciones</TableHead>
@@ -162,10 +184,10 @@ const UserManagementTable: React.FC = () => {
                       <TableCell className="font-medium">{user.name}</TableCell>
                       <TableCell>{user.address}</TableCell>
                       <TableCell>{user.phone}</TableCell>
-                      <TableCell>{user.email}</TableCell>
+                      {/* <TableCell>{user.email}</TableCell> */}
                       <TableCell>
                          <Badge variant={user.role === 'admin' ? 'destructive' : 'secondary'} className="capitalize">
-                           {user.role}
+                            {user.role === 'admin' ? 'Admin' : 'Usuario'}
                          </Badge>
                       </TableCell>
                       <TableCell>
@@ -174,36 +196,53 @@ const UserManagementTable: React.FC = () => {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center space-x-1">
+                        {/* Enable/Disable Button */}
                         <Button
                           variant="ghost"
                           size="icon"
                           className={`h-8 w-8 ${user.isEnabled ? 'text-destructive hover:text-destructive/90' : 'text-green-600 hover:text-green-700'}`}
                           onClick={() => openConfirmationDialog(user, user.isEnabled ? 'disable' : 'enable')}
                           title={user.isEnabled ? 'Deshabilitar Usuario' : 'Habilitar Usuario'}
+                          disabled={isUpdating} // Disable during any update
                         >
                           {user.isEnabled ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
                         </Button>
-                         <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-primary hover:text-primary/90"
-                          onClick={() => handleManageRoles(user)}
-                          title="Gestionar Roles"
-                          disabled // Disable until implemented
-                        >
-                          <ShieldAlert className="h-4 w-4" />
-                        </Button>
-                        {/* Add Edit User button maybe later
-                         <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-blue-600 hover:text-blue-700"
-                          // onClick={() => handleEditUser(user)} // To be implemented
-                          title="Editar Usuario"
-                          disabled // Disable until implemented
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button> */}
+
+                         {/* Role Management Dropdown */}
+                         <DropdownMenu>
+                           <DropdownMenuTrigger asChild disabled={isUpdating}>
+                               <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-primary hover:text-primary/90"
+                                title="Gestionar Roles"
+                                disabled={isUpdating} // Disable during any update
+                               >
+                                <ShieldAlert className="h-4 w-4" />
+                               </Button>
+                           </DropdownMenuTrigger>
+                           <DropdownMenuContent align="end">
+                             {user.role !== 'admin' && (
+                               <DropdownMenuItem
+                                 onSelect={() => handleSetRole(user.id, user.name, 'admin')}
+                                 disabled={isUpdatingRole}
+                               >
+                                <ShieldCheck className="mr-2 h-4 w-4" />
+                                Hacer Administrador
+                               </DropdownMenuItem>
+                             )}
+                             {user.role !== 'user' && (
+                               <DropdownMenuItem
+                                 onSelect={() => handleSetRole(user.id, user.name, 'user')}
+                                 disabled={isUpdatingRole}
+                               >
+                                 <ShieldX className="mr-2 h-4 w-4" />
+                                 Hacer Usuario
+                               </DropdownMenuItem>
+                             )}
+                           </DropdownMenuContent>
+                         </DropdownMenu>
+
                       </TableCell>
                     </TableRow>
                   ))}
@@ -214,7 +253,7 @@ const UserManagementTable: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Confirmation Dialog */}
+      {/* Confirmation Dialog for Enable/Disable */}
       <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -226,13 +265,13 @@ const UserManagementTable: React.FC = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDialogOpen(false)} disabled={isUpdating}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setDialogOpen(false)} disabled={isUpdatingStatus}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleToggleUserStatus}
-              disabled={isUpdating}
+              disabled={isUpdatingStatus}
               className={actionType === 'disable' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : 'bg-green-600 text-white hover:bg-green-700'}
             >
-              {isUpdating ? <LoadingSpinner size="sm" className="mr-2"/> : (actionType === 'disable' ? 'Sí, Deshabilitar' : 'Sí, Habilitar')}
+              {isUpdatingStatus ? <LoadingSpinner size="sm" className="mr-2"/> : (actionType === 'disable' ? 'Sí, Deshabilitar' : 'Sí, Habilitar')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -242,3 +281,4 @@ const UserManagementTable: React.FC = () => {
 };
 
 export default UserManagementTable;
+

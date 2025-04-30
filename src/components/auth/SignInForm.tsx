@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -5,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore'; // Import Firestore functions
 import { useFirebase } from '@/context/FirebaseContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,7 +30,7 @@ const signInSchema = z.object({
 type SignInFormValues = z.infer<typeof signInSchema>;
 
 const SignInForm: React.FC = () => {
-  const { auth } = useFirebase();
+  const { auth, db } = useFirebase(); // Get Firestore instance
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -43,12 +45,32 @@ const SignInForm: React.FC = () => {
   const onSubmit = async (values: SignInFormValues) => {
     setIsLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, values.email, values.password);
+      const userCredential = await signInWithEmailAndPassword(auth, values.email, values.password);
+      const user = userCredential.user;
+
+       // **Check if user is enabled in Firestore**
+      const userDocRef = doc(db, 'users', user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+
+      if (userDocSnap.exists() && userDocSnap.data()?.isEnabled === false) {
+         // User exists but is disabled
+         await auth.signOut(); // Sign the user out immediately
+         toast({
+            title: 'Acceso Denegado',
+            description: 'Tu cuenta ha sido deshabilitada por un administrador.',
+            variant: 'destructive',
+         });
+         setIsLoading(false);
+         return; // Stop further execution
+      }
+
+      // If enabled or doc doesn't exist (should not happen with current signup flow)
       toast({
         title: '¡Éxito!',
         description: 'Has ingresado correctamente.',
       });
       // No need to redirect here, AuthContext handles the state change
+
     } catch (error: any) {
       console.error("Sign in error:", error);
       let errorMessage = 'Error al ingresar. Verifica tus credenciales.';
@@ -56,14 +78,21 @@ const SignInForm: React.FC = () => {
           errorMessage = 'Correo electrónico o contraseña incorrectos.';
       } else if (error.code === 'auth/invalid-email') {
           errorMessage = 'El formato del correo electrónico no es válido.';
+      } else if (error.code === 'auth/network-request-failed') {
+         errorMessage = 'Error de red. Por favor, revisa tu conexión.';
       }
+      // Add other specific error codes if needed
+
       toast({
         title: 'Error de Ingreso',
         description: errorMessage,
         variant: 'destructive',
       });
     } finally {
-      setIsLoading(false);
+      // Only set loading to false if not already handled by the disabled check
+      if (auth.currentUser) { // Check if user is still logged in
+         setIsLoading(false);
+      }
     }
   };
 
@@ -105,3 +134,4 @@ const SignInForm: React.FC = () => {
 };
 
 export default SignInForm;
+
