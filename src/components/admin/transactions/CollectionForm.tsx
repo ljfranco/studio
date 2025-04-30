@@ -42,11 +42,15 @@ type CollectionFormValues = z.infer<typeof collectionSchema>;
 // --- Fetching Function (excluding admin and generic) ---
 const fetchUsersForCollection = async (db: any): Promise<UserData[]> => {
     const usersCol = collection(db, 'users');
-    // Fetch users that are not admin and not the generic user
-    const q = query(usersCol, where('role', '!=', 'admin'), where('isGeneric', '!=', true), orderBy('name'));
+    // Fetch users with 'user' role first
+    const q = query(usersCol, where('role', '==', 'user'), orderBy('name'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserData));
+    // Filter out generic users client-side
+    return snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as UserData))
+        .filter(user => user.isGeneric !== true); // Filter out the generic user
 };
+
 
 // --- Recalculate Balance Logic (Copied & adapted from UserDetailView) ---
 const recalculateBalance = async (userId: string, db: any, adminUser: AuthUser | null, role: string | null, toast: (options: any) => void): Promise<void> => {
@@ -132,19 +136,31 @@ const CollectionForm: React.FC = () => {
 
             // Create transaction document
             const transactionsColRef = collection(db, 'transactions');
-            await addDoc(transactionsColRef, {
-                userId: userId,
-                type: 'payment',
-                description: description,
-                amount: amount,
-                balanceAfter: 0, // Placeholder, will be updated by recalculation
-                timestamp: Timestamp.now(),
-                addedBy: adminUser.uid,
-                addedByName: adminUser.displayName || adminUser.email,
-                isAdminAction: true,
-                isCancelled: false,
-                isModified: false,
+            const newTransactionRef = doc(transactionsColRef); // Generate ID beforehand
+
+            await runTransaction(db, async (dbTransaction) => {
+                 // Read user doc within transaction to be safe
+                 const userDocRef = doc(db, 'users', userId);
+                 const userSnap = await dbTransaction.get(userDocRef);
+                 if (!userSnap.exists()) {
+                     throw new Error(`El usuario ${userId} no existe.`);
+                 }
+
+                 dbTransaction.set(newTransactionRef, { // Use the generated ref
+                     userId: userId,
+                     type: 'payment',
+                     description: description,
+                     amount: amount,
+                     balanceAfter: 0, // Placeholder, will be updated by recalculation
+                     timestamp: Timestamp.now(),
+                     addedBy: adminUser.uid,
+                     addedByName: adminUser.displayName || adminUser.email,
+                     isAdminAction: true,
+                     isCancelled: false,
+                     isModified: false,
+                 });
             });
+
 
             return userId; // Return userId for recalculation
         },
@@ -267,3 +283,4 @@ const CollectionForm: React.FC = () => {
 };
 
 export default CollectionForm;
+
