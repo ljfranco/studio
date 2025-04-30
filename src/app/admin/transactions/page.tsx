@@ -9,8 +9,8 @@ import { ArrowLeft, ShoppingCart, Banknote, Truck, CalendarDays } from 'lucide-r
 export default function AdminTransactionsPage() {
   return (
      <div className="space-y-6">
-        {/* Back Button */}
-        <Link href="/admin" passHref>
+        {/* Back Button - Removed passHref */}
+        <Link href="/admin">
             <Button variant="outline">
             <ArrowLeft className="mr-2 h-4 w-4" /> Volver al Panel
             </Button>
