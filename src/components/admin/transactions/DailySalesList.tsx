@@ -1,10 +1,9 @@
-
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react'; // Added useMemo
 import { useAuth } from '@/context/AuthContext';
 import { useFirebase } from '@/context/FirebaseContext';
-import { collection, query, where, orderBy, onSnapshot, Timestamp, getDocs, doc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, Timestamp, getDocs, doc, writeBatch, getDoc } from 'firebase/firestore'; // Removed startOfDay/endOfDay from firestore imports
 import { format, startOfDay, endOfDay } from 'date-fns'; // Import startOfDay and endOfDay from date-fns
 import { es } from 'date-fns/locale';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -59,9 +58,17 @@ const DailySalesList: React.FC = () => {
     const [isSaleDetailOpen, setIsSaleDetailOpen] = useState(false);
     const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
 
-    const today = new Date();
-    const startOfToday = startOfDay(today);
-    const endOfToday = endOfDay(today);
+    // Memoize startOfToday and endOfToday
+    const todayRange = useMemo(() => {
+        const today = new Date();
+        return {
+            start: startOfDay(today),
+            end: endOfDay(today),
+        };
+    }, []); // Empty dependency array means this runs only once on mount
+
+    const startOfToday = todayRange.start;
+    const endOfToday = todayRange.end;
 
     // Effect to fetch daily sales using snapshot listener
     useEffect(() => {
@@ -74,6 +81,7 @@ const DailySalesList: React.FC = () => {
         console.log("Setting up snapshot listener for daily sales...");
 
         const transactionsColRef = collection(db, 'transactions');
+        // Use memoized startOfToday and endOfToday in the query
         const q = query(
             transactionsColRef,
             where('timestamp', '>=', Timestamp.fromDate(startOfToday)),
@@ -91,8 +99,22 @@ const DailySalesList: React.FC = () => {
                 } as Transaction))
                 .filter(tx => tx.saleDetails && tx.saleDetails.length > 0); // Ensure it's a sale transaction
 
-            // Set sales state
-            setSales(fetchedSales);
+            // Set sales state - this might be the source of the loop if not handled carefully
+            // Let's ensure we only update if the data actually changes shallowly
+            setSales(currentSales => {
+                 // Simple check: if lengths differ or IDs differ, update
+                 if (fetchedSales.length !== currentSales.length ||
+                     fetchedSales.some((sale, index) => sale.id !== currentSales[index]?.id) ||
+                     // Add a check for modification/cancellation status if needed
+                     fetchedSales.some((sale, index) => sale.isCancelled !== currentSales[index]?.isCancelled || sale.isModified !== currentSales[index]?.isModified)
+                 ) {
+                    console.log("Sales data changed, updating state.");
+                    return fetchedSales;
+                 }
+                 console.log("Sales data hasn't changed, skipping state update.");
+                 return currentSales; // Return previous state if no change detected
+            });
+
 
             // Fetch user names for the sales
             const userIds = Array.from(new Set(fetchedSales.map(sale => sale.userId)));
@@ -106,6 +128,7 @@ const DailySalesList: React.FC = () => {
                              console.log("Updating user names state.");
                              return names;
                         }
+                        console.log("User names haven't changed, skipping state update.");
                         return currentNames;
                     });
                  } catch (fetchError) {
@@ -130,10 +153,7 @@ const DailySalesList: React.FC = () => {
             console.log("Unsubscribing from daily sales snapshot listener.");
             unsubscribe();
         };
-        // Dependencies: db, adminUser, role, startOfToday, endOfToday, toast
-        // Note: Using startOfDay/endOfDay derived from `new Date()` can cause re-renders if not stable.
-        // Consider memoizing these or passing them as props if the component re-renders frequently.
-        // For now, include them as they define the query range.
+        // Only depend on stable values now
     }, [db, adminUser, role, startOfToday, endOfToday, toast]);
 
 
@@ -173,7 +193,10 @@ const DailySalesList: React.FC = () => {
                 // Check if user doc exists before updating (optional, but safer)
                  const userSnap = await getDoc(userDocRef); // Read outside batch for check
                  if (userSnap.exists()) {
-                     batch.update(userDocRef, { balance: currentBalance }); // Update final balance on user doc
+                    // Only update if the balance is actually different
+                    if (userSnap.data().balance !== currentBalance) {
+                         batch.update(userDocRef, { balance: currentBalance }); // Update final balance on user doc
+                    }
                  } else {
                       console.warn(`User document ${userId} not found during batch balance update.`);
                  }
@@ -237,11 +260,16 @@ const DailySalesList: React.FC = () => {
     // --- Success Callback for Dialogs ---
      const handleActionSuccess = useCallback(() => {
          if (selectedTransaction) {
-             recalculateBalancesForAffectedUsers([selectedTransaction.userId], false);
+             // Trigger recalculation *after* dialog closes and state updates from listener
+             // Use a small timeout to ensure Firestore listener has likely updated sales state
+             setTimeout(() => {
+                console.log("Action successful, triggering recalculation...");
+                recalculateBalancesForAffectedUsers([selectedTransaction.userId], false);
+             }, 100); // Adjust delay if needed
          }
          // No need to manually refetch sales here, the snapshot listener will update the state
          handleDialogClose(); // Ensure dialog closes after action
-     }, [selectedTransaction, recalculateBalancesForAffectedUsers]);
+     }, [selectedTransaction, recalculateBalancesForAffectedUsers, handleDialogClose]);
 
 
     if (loading) {
@@ -429,3 +457,4 @@ const DailySalesList: React.FC = () => {
 };
 
 export default DailySalesList;
+
