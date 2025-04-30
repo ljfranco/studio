@@ -23,7 +23,8 @@ import { Card, CardContent } from '@/components/ui/card'; // Import Card for tot
 
 
 // --- Helper function to get user names ---
-const fetchUserNames = async (db: any, userIds: string[]): Promise<Record<string, string>> => {
+// Now defined outside the component to be exportable
+export const fetchUserNames = async (db: any, userIds: string[]): Promise<Record<string, string>> => {
     if (userIds.length === 0) return {};
     const userMap: Record<string, string> = {};
     // Fetch in chunks if necessary, but for daily sales, the list might be manageable
@@ -105,12 +106,8 @@ const DailySalesList: React.FC = () => {
             // Set sales state - this might be the source of the loop if not handled carefully
             // Let's ensure we only update if the data actually changes shallowly
             setSales(currentSales => {
-                 // Simple check: if lengths differ or IDs differ, update
-                 if (fetchedSales.length !== currentSales.length ||
-                     fetchedSales.some((sale, index) => sale.id !== currentSales[index]?.id) ||
-                     // Add a check for modification/cancellation status if needed
-                     fetchedSales.some((sale, index) => sale.isCancelled !== currentSales[index]?.isCancelled || sale.isModified !== currentSales[index]?.isModified)
-                 ) {
+                 // Compare based on JSON string representation for simplicity, or use a deep comparison library
+                 if (JSON.stringify(fetchedSales) !== JSON.stringify(currentSales)) {
                     console.log("Sales data changed, updating state.");
                     return fetchedSales;
                  }
@@ -156,7 +153,7 @@ const DailySalesList: React.FC = () => {
             console.log("Unsubscribing from daily sales snapshot listener.");
             unsubscribe();
         };
-        // Only depend on stable values now
+        // Add db, adminUser, role, startOfToday, endOfToday, toast to dependency array
     }, [db, adminUser, role, startOfToday, endOfToday, toast]);
 
 
@@ -280,7 +277,7 @@ const DailySalesList: React.FC = () => {
          }
          // No need to manually refetch sales here, the snapshot listener will update the state
          handleDialogClose(); // Ensure dialog closes after action
-     }, [selectedTransaction, recalculateBalancesForAffectedUsers, handleDialogClose]);
+     }, [selectedTransaction, recalculateBalancesForAffectedUsers]);
 
 
     if (loading) {
@@ -487,5 +484,5 @@ const DailySalesList: React.FC = () => {
     );
 };
 
-export default DailySalesList;
 
+export default DailySalesList;
