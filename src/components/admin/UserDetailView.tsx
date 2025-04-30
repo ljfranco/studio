@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -12,8 +13,10 @@ import RestoreTransactionDialog from './RestoreTransactionDialog'; // Import Res
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, DollarSign, ArrowLeft, RefreshCw } from 'lucide-react'; // Added Icons
+import { PlusCircle, DollarSign, ArrowLeft, RefreshCw, Pencil } from 'lucide-react'; // Added Icons, Pencil for edit sale
 import AddTransactionDialog from '@/components/dashboard/AddTransactionDialog'; // Re-use AddTransactionDialog
+import SaleForm from '@/components/admin/transactions/SaleForm'; // Import SaleForm for editing
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'; // Import Dialog for SaleForm
 import Link from 'next/link'; // Import Link for back navigation
 import { useToast } from '@/hooks/use-toast';
 import type { Transaction } from '@/types/transaction'; // Import the updated type
@@ -41,6 +44,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [isRestoreDialogOpen, setIsRestoreDialogOpen] = useState(false); // State for restore dialog
+  const [isEditSaleDialogOpen, setIsEditSaleDialogOpen] = useState(false); // State for editing a sale
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [isRecalculating, setIsRecalculating] = useState(false);
 
@@ -140,9 +144,16 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
              // Get the user document reference
             const userDocRef = doc(db, 'users', userId);
 
-            // Update the user's final balance
-            console.log(`Final calculated balance: ${currentBalance}. Updating user document.`);
-            batch.update(userDocRef, { balance: currentBalance });
+             // Read the user document to prevent overwriting other fields potentially
+             const userSnap = await getDoc(userDocRef); // Use getDoc for consistency
+             if (userSnap.exists() && userSnap.data().balance !== currentBalance) {
+                 console.log(`Final calculated balance: ${currentBalance}. Updating user document.`);
+                 batch.update(userDocRef, { balance: currentBalance });
+             } else if (!userSnap.exists()) {
+                 console.warn(`User document ${userId} not found during balance update.`);
+             } else {
+                 console.log(`User ${userId} balance is already correct: ${currentBalance}`);
+             }
 
 
             // Commit the batch updates
@@ -173,9 +184,20 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
 
   // --- Action Handlers ---
   const handleEdit = (transaction: Transaction) => {
-    setSelectedTransaction(transaction);
-    setIsEditDialogOpen(true);
+    // Check if it's a sale; if so, open the SaleForm dialog instead
+    if (transaction.saleDetails && transaction.saleDetails.length > 0) {
+        handleEditSale(transaction);
+    } else {
+        setSelectedTransaction(transaction);
+        setIsEditDialogOpen(true); // Open the standard edit dialog for non-sales
+    }
   };
+
+   // Handler specifically for editing sales using SaleForm
+   const handleEditSale = (transaction: Transaction) => {
+        setSelectedTransaction(transaction);
+        setIsEditSaleDialogOpen(true);
+   };
 
   const handleCancel = (transaction: Transaction) => {
     setSelectedTransaction(transaction);
@@ -193,6 +215,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
     setIsEditDialogOpen(false);
     setIsCancelDialogOpen(false);
     setIsRestoreDialogOpen(false); // Close restore dialog as well
+    setIsEditSaleDialogOpen(false); // Close edit sale dialog
     setSelectedTransaction(null);
     // Recalculation is now handled by the onSuccessCallback in the dialogs
   };
@@ -243,7 +266,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
       <Card className="shadow-md">
         <CardHeader>
           <CardTitle className="text-2xl">Cuenta de {userData.name}</CardTitle>
-          <CardDescription>Email: {userData.email}</CardDescription>
+          {/* <CardDescription>Email: {userData.email}</CardDescription> */}
         </CardHeader>
         <CardContent>
           <p className={`text-3xl font-bold ${userData.balance < 0 ? 'text-destructive' : 'text-primary'}`}>
@@ -259,6 +282,8 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
         <Button onClick={() => setIsAddPaymentOpen(true)} className="flex-1">
           <DollarSign className="mr-2 h-4 w-4" /> Registrar Pago (Admin)
         </Button>
+        {/* Button to add a new sale - Can potentially reuse SaleForm */}
+        {/* Consider adding a dedicated "Add Sale" button here */}
       </div>
 
       <Card className="shadow-md">
@@ -271,7 +296,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
              transactions={transactions}
              showUserName={false}
              isAdminView={true} // Enable admin actions
-             onEdit={handleEdit}
+             onEdit={handleEdit} // Use the combined edit handler
              onCancel={handleCancel}
              onRestore={handleRestore} // Pass restore handler
           />
@@ -279,6 +304,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
       </Card>
 
        {/* Dialogs */}
+       {/* Add Transaction Dialogs (Purchase/Payment) */}
        <AddTransactionDialog
             isOpen={isAddPurchaseOpen}
             onClose={() => { setIsAddPurchaseOpen(false); }}
@@ -296,7 +322,8 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
             onSuccessCallback={handleActionSuccess} // Use success callback
        />
 
-       {selectedTransaction && (
+       {/* Standard Edit/Cancel/Restore Dialogs (for non-sales) */}
+       {selectedTransaction && !selectedTransaction.saleDetails && (
         <>
             <EditTransactionDialog
                 isOpen={isEditDialogOpen}
@@ -305,22 +332,50 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
                 adminUser={adminUser}
                 onSuccessCallback={handleActionSuccess} // Use success callback
             />
-            <CancelTransactionDialog
-                isOpen={isCancelDialogOpen}
-                onClose={handleDialogClose}
-                transaction={selectedTransaction}
-                adminUser={adminUser}
-                onSuccessCallback={handleActionSuccess} // Use success callback
-            />
-            <RestoreTransactionDialog
-                isOpen={isRestoreDialogOpen}
-                onClose={handleDialogClose}
-                transaction={selectedTransaction}
-                adminUser={adminUser}
-                onSuccessCallback={handleActionSuccess} // Use success callback
-            />
+
         </>
        )}
+       {/* Cancel/Restore Dialogs (for all types) */}
+        {selectedTransaction && (
+            <>
+                <CancelTransactionDialog
+                    isOpen={isCancelDialogOpen}
+                    onClose={handleDialogClose}
+                    transaction={selectedTransaction}
+                    adminUser={adminUser}
+                    onSuccessCallback={handleActionSuccess} // Use success callback
+                />
+                <RestoreTransactionDialog
+                    isOpen={isRestoreDialogOpen}
+                    onClose={handleDialogClose}
+                    transaction={selectedTransaction}
+                    adminUser={adminUser}
+                    onSuccessCallback={handleActionSuccess} // Use success callback
+                />
+            </>
+        )}
+
+
+        {/* Edit Sale Dialog (using SaleForm) */}
+        <Dialog open={isEditSaleDialogOpen} onOpenChange={(open) => { if (!open) handleDialogClose(); }}>
+            <DialogContent className="sm:max-w-4xl"> {/* Wider dialog for sale form */}
+                 <DialogHeader>
+                    <DialogTitle>Modificar Venta</DialogTitle>
+                    <DialogDescription>
+                        Modifica los productos o cantidades de esta venta. Se cancelará la venta original y se creará una nueva.
+                    </DialogDescription>
+                 </DialogHeader>
+                 {selectedTransaction && selectedTransaction.saleDetails && (
+                    <SaleForm
+                        saleToEdit={selectedTransaction}
+                        onClose={handleDialogClose}
+                        onSuccessCallback={handleActionSuccess}
+                    />
+                 )}
+            </DialogContent>
+        </Dialog>
+
+
     </div>
   );
 };

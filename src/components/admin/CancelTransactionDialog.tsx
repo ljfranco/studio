@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react';
 import { useFirebase } from '@/context/FirebaseContext';
-import { doc, runTransaction, Timestamp } from 'firebase/firestore';
+import { doc, runTransaction, Timestamp, collection, getDoc, writeBatch } from 'firebase/firestore'; // Added collection, getDoc, writeBatch
 import type { User } from 'firebase/auth';
 import {
   AlertDialog,
@@ -20,7 +20,8 @@ import { Input } from '@/components/ui/input'; // Use Input for reason
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
-import type { Transaction } from '@/types/transaction';
+import type { Transaction, SaleDetail } from '@/types/transaction'; // Import SaleDetail
+import type { Product } from '@/types/product'; // Import Product type
 
 interface CancelTransactionDialogProps {
   isOpen: boolean;
@@ -57,15 +58,38 @@ const CancelTransactionDialog: React.FC<CancelTransactionDialogProps> = ({
 
     try {
         const transactionDocRef = doc(db, 'transactions', transaction.id);
+        const isSaleTransaction = transaction.saleDetails && transaction.saleDetails.length > 0;
 
         await runTransaction(db, async (dbTransaction) => {
-            // Read the transaction again inside the transaction (optional but safer)
+            // 1. Read the transaction again inside the transaction
             const freshDoc = await dbTransaction.get(transactionDocRef);
             if (!freshDoc.exists()) {
                 throw new Error("La transacción ya no existe.");
             }
+            const freshTransactionData = freshDoc.data() as Transaction;
 
-            // Update the transaction document to mark as cancelled
+            // 2. If it's a sale, read products and prepare stock updates
+            const productUpdates: { ref: any, newQuantity: number }[] = [];
+            if (isSaleTransaction && freshTransactionData.saleDetails) {
+                console.log("Cancelling a sale transaction. Restoring stock...");
+                for (const item of freshTransactionData.saleDetails) {
+                    const productRef = doc(db, 'products', item.productId);
+                    const productDoc = await dbTransaction.get(productRef);
+                    if (!productDoc.exists()) {
+                        // If product doesn't exist, we can't restore stock, but cancellation might still proceed. Log a warning.
+                        console.warn(`Product ${item.productId} not found during sale cancellation stock restoration.`);
+                        // Optionally throw an error if stock restoration is critical:
+                        // throw new Error(`Producto ${item.productId} no encontrado al intentar restaurar stock.`);
+                    } else {
+                        const currentQuantity = productDoc.data()?.quantity ?? 0;
+                        const newQuantity = currentQuantity + item.quantity;
+                        productUpdates.push({ ref: productRef, newQuantity });
+                         console.log(`Product ${item.productId}: Current Qty ${currentQuantity}, Restoring ${item.quantity}, New Qty ${newQuantity}`);
+                    }
+                }
+            }
+
+            // 3. Update the transaction document to mark as cancelled
             dbTransaction.update(transactionDocRef, {
                 isCancelled: true,
                 cancelledAt: Timestamp.now(),
@@ -80,12 +104,18 @@ const CancelTransactionDialog: React.FC<CancelTransactionDialogProps> = ({
                 restoredBy: null,
                 restoredByName: null,
             });
+
+            // 4. Apply product stock updates (if any)
+            productUpdates.forEach(update => {
+                 dbTransaction.update(update.ref, { quantity: update.newQuantity });
+            });
       });
 
+      // Stock updated within the transaction
 
       toast({
         title: '¡Éxito!',
-        description: 'Transacción cancelada correctamente.',
+        description: `Transacción ${isSaleTransaction ? 'de venta ' : ''}cancelada correctamente.${isSaleTransaction ? ' Stock restaurado.' : ''}`,
       });
       setCancellationReason(''); // Reset reason field
       console.log("[Dialog] Calling onSuccessCallback (recalculateBalance)...");
@@ -119,6 +149,9 @@ const CancelTransactionDialog: React.FC<CancelTransactionDialogProps> = ({
           <AlertDialogDescription>
             Estás a punto de cancelar la transacción "{transaction.description}" por {transaction.amount}.
             Esta acción marcará la transacción como cancelada y recalculará el saldo. La transacción permanecerá visible en el historial pero tachada.
+             {transaction.saleDetails && transaction.saleDetails.length > 0 && (
+                <span className="block mt-1 font-semibold text-orange-600">Esta es una venta. Se restaurará el stock de los productos involucrados.</span>
+             )}
              {transaction.isModified && <span className="block mt-1 text-xs text-orange-600">Nota: Esta transacción fue modificada previamente.</span>}
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -149,3 +182,4 @@ const CancelTransactionDialog: React.FC<CancelTransactionDialogProps> = ({
 };
 
 export default CancelTransactionDialog;
+
