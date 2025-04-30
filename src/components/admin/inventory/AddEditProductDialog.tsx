@@ -33,6 +33,7 @@ import {
 import type { Product } from '@/types/product';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // For camera error
 import { cn } from '@/lib/utils'; // Import cn
+import { LoadingSpinner } from '@/components/ui/loading-spinner'; // Import LoadingSpinner
 
 
 const productSchema = z.object({
