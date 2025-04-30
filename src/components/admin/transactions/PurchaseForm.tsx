@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -99,76 +100,119 @@ const PurchaseForm: React.FC = () => {
 
       useEffect(() => {
         let stream: MediaStream | null = null;
+        let stopStream = () => {
+             if (stream) {
+                console.log("Stopping camera stream.");
+                stream.getTracks().forEach(track => track.stop());
+                stream = null; // Ensure stream is marked as null
+            }
+            if (videoRef.current) {
+               videoRef.current.srcObject = null;
+            }
+        }
+
         const getCameraPermission = async () => {
           if (!isScanning) {
             setHasCameraPermission(null);
-            if (videoRef.current && videoRef.current.srcObject) {
-                (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
-                videoRef.current.srcObject = null;
-              }
+            stopStream();
             return;
           }
           try {
             stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
             setHasCameraPermission(true);
-            if (videoRef.current) videoRef.current.srcObject = stream;
+            if (videoRef.current) {
+                 videoRef.current.srcObject = stream;
+                 // Attempt to play the video stream
+                 videoRef.current.play().catch(playError => {
+                    console.error("Error attempting to play video:", playError);
+                     // Handle error - perhaps permission issue or device busy
+                     setHasCameraPermission(false); // Revert permission state if play fails
+                     toast({ variant: 'destructive', title: 'Error de Cámara', description: 'No se pudo iniciar la cámara.'});
+                     setIsScanning(false); // Stop scanning
+                 });
+            } else {
+                 // Video ref not ready yet, this might cause issues
+                 console.warn("Video ref not available when setting stream");
+                 stopStream(); // Stop the stream if ref is not ready
+                 setIsScanning(false);
+            }
           } catch (err) {
             console.error('Error accessing camera:', err);
             setHasCameraPermission(false);
             toast({ variant: 'destructive', title: 'Acceso a Cámara Denegado' });
             setIsScanning(false);
+            stopStream();
           }
         };
         getCameraPermission();
-        return () => stream?.getTracks().forEach(track => track.stop());
-      }, [isScanning, toast]);
+        return stopStream; // Cleanup function returns the stopStream function
+      }, [isScanning, toast]); // Only run when isScanning changes
 
       useEffect(() => {
           if (!isScanning || !hasCameraPermission || !videoRef.current || !isBarcodeDetectorSupported) return;
 
           let animationFrameId: number;
-          const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['ean_13', 'upc_a', 'code_128'] });
+           let isDetectionRunning = true; // Flag to control the loop
+          const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['ean_13', 'upc_a', 'code_128', 'ean_8', 'itf', 'code_39', 'code_93'] }); // Added more formats
 
           const detectBarcode = async () => {
-              if (!videoRef.current || !videoRef.current.srcObject || !isScanning) return;
-
-              // Check if video is ready before detecting
-              if (videoRef.current.readyState < videoRef.current.HAVE_CURRENT_DATA) {
-                  console.log("Video not ready for detection, waiting...");
-                  animationFrameId = requestAnimationFrame(detectBarcode);
-                  return;
+              // Check conditions inside the loop
+              if (!isDetectionRunning || !videoRef.current || !videoRef.current.srcObject || !isScanning) {
+                 console.log("Stopping detection loop.");
+                 return; // Exit loop if conditions are no longer met
               }
+
+               // More robust check for video readiness
+               // Checks if video has metadata loaded and has dimensions > 0
+               if (videoRef.current.readyState < videoRef.current.HAVE_METADATA || videoRef.current.videoWidth === 0) {
+                  console.log("Video not ready for detection, waiting...");
+                  animationFrameId = requestAnimationFrame(detectBarcode); // Retry detection
+                  return;
+               }
 
               try {
                 const barcodes = await barcodeDetector.detect(videoRef.current);
-                if (barcodes.length > 0 && barcodes[0].rawValue) {
+                if (barcodes.length > 0 && barcodes[0].rawValue && isDetectionRunning) { // Check flag again before processing
                   const scannedId = barcodes[0].rawValue;
+                  console.log("Barcode detected:", scannedId);
                   const product = products.find(p => p.id === scannedId);
-                  setIsScanning(false); // Stop scanning after detection attempt
+                   setIsScanning(false); // Stop scanning UI/state
+                   isDetectionRunning = false; // Stop the detection loop
+
                   if (product) {
                       setSelectedProduct(product);
                       setSearchText(`${product.name} (${product.id})`);
-                      // Removed pre-fill price logic based on distributor
-                      setPurchasePrice(''); // Clear price field
+                      setPurchasePrice('');
                       toast({ title: "Código Detectado", description: `${product.name}` });
                   } else {
-                       // Product not found, prompt to add
-                       setBarcodeToAdd(scannedId); // Store the scanned barcode
-                       setIsAddProductDialogOpen(true); // Open the dialog
+                       setBarcodeToAdd(scannedId);
+                       setIsAddProductDialogOpen(true);
                        toast({ title: "Producto no encontrado", description: `Código: ${scannedId}. Agrega el nuevo producto.`, variant: "default", duration: 5000 });
                   }
-                } else {
+                } else if (isDetectionRunning) { // Continue only if running
                   animationFrameId = requestAnimationFrame(detectBarcode);
                 }
               } catch (error) {
-                console.error("Error detecting barcode:", error);
-                // Continue scanning even if detection fails once
-                animationFrameId = requestAnimationFrame(detectBarcode);
+                 // Avoid logging the common InvalidStateError unless needed for debugging
+                 if (!(error instanceof DOMException && error.name === 'InvalidStateError')) {
+                    console.error("Error detecting barcode:", error);
+                 }
+                 // Continue scanning even if detection fails once, if still running
+                 if (isDetectionRunning) {
+                    animationFrameId = requestAnimationFrame(detectBarcode);
+                 }
               }
           };
-          animationFrameId = requestAnimationFrame(detectBarcode);
-          return () => cancelAnimationFrame(animationFrameId);
-       }, [isScanning, hasCameraPermission, products, toast, isBarcodeDetectorSupported]); // Added products as dependency
+          animationFrameId = requestAnimationFrame(detectBarcode); // Start the loop
+
+           // Cleanup function
+           return () => {
+               console.log("Cleaning up barcode detection effect.");
+               isDetectionRunning = false; // Signal loop to stop
+               cancelAnimationFrame(animationFrameId); // Cancel any pending frame
+           };
+       }, [isScanning, hasCameraPermission, products, toast, isBarcodeDetectorSupported]); // Re-check dependencies
+
 
        const toggleScan = () => {
          if (!isBarcodeDetectorSupported) {
@@ -176,11 +220,12 @@ const PurchaseForm: React.FC = () => {
              return;
          }
          setIsScanning(prev => !prev);
-         if (isScanning) { // If turning scanner OFF
-             setSelectedProduct(null);
-             setSearchText('');
-             setPurchasePrice('');
-         }
+         // Clear selection only when *starting* the scan or explicitly turning it off
+          if (!isScanning) { // If we are about to START scanning
+              setSelectedProduct(null);
+              setSearchText('');
+              setPurchasePrice('');
+          }
        };
 
     // --- Purchase Item Management ---
