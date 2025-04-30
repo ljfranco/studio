@@ -36,8 +36,7 @@ const fetchUsers = async (db: any): Promise<UserData[]> => {
         .map(doc => ({ id: doc.id, ...doc.data() } as UserData))
         .filter(user => user.id !== CONSUMIDOR_FINAL_ID);
 
-     users.unshift({ id: CONSUMIDOR_FINAL_ID, name: CONSUMIDOR_FINAL_NAME, email: '', balance: 0, isEnabled: true, role: 'user' });
-
+     // Ensure generic user exists and add to the beginning
      const genericUserDocRef = doc(db, 'users', CONSUMIDOR_FINAL_ID);
      const genericDocSnap = await getDoc(genericUserDocRef);
      if (!genericDocSnap.exists()) {
@@ -53,8 +52,13 @@ const fetchUsers = async (db: any): Promise<UserData[]> => {
             console.log("Created generic consumer document.");
         } catch (error) {
              console.error("Failed to create generic consumer document:", error);
+             // Proceed without the generic user if creation fails
         }
      }
+    // Add the generic user to the start regardless of creation result (it might exist already)
+    users.unshift({ id: CONSUMIDOR_FINAL_ID, name: CONSUMIDOR_FINAL_NAME, email: '', balance: 0, isEnabled: true, role: 'user', isGeneric: true });
+
+
     return users;
 };
 
@@ -295,34 +299,21 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
             await runTransaction(db, async (transaction) => {
                 const timestamp = Timestamp.now();
                 const originalSaleId = isEditMode ? saleToEdit?.id : null;
-
-                // --- Step 1: Handle Original Sale (if editing) ---
                 let originalSaleDetails: SaleDetail[] = [];
+                let originalSaleRef: any = null; // Define outside if
+
+                // --- Step 1: Read Original Sale (if editing) ---
                 if (isEditMode && originalSaleId) {
-                    const originalSaleRef = doc(db, 'transactions', originalSaleId);
+                    originalSaleRef = doc(db, 'transactions', originalSaleId);
                     const originalSaleSnap = await transaction.get(originalSaleRef);
                     if (!originalSaleSnap.exists()) {
                         throw new Error("La venta original a modificar no existe.");
                     }
                     const originalSaleData = originalSaleSnap.data() as Transaction;
                     originalSaleDetails = originalSaleData.saleDetails || [];
-
-                    // Mark original sale as cancelled/modified
-                    transaction.update(originalSaleRef, {
-                        isCancelled: true, // Mark as cancelled
-                        cancelledAt: timestamp,
-                        cancelledBy: adminUser.uid,
-                        cancelledByName: adminUser.displayName || adminUser.email,
-                        cancellationReason: `Modificada por nueva venta ${timestamp.toMillis()}`, // Indicate modification
-                        // Optionally add modification fields if needed for audit
-                        // isModified: true,
-                        // modifiedAt: timestamp,
-                        // modifiedBy: adminUser.uid,
-                    });
                 }
 
-                // --- Step 2: Read Product Stock (Combined Needs) ---
-                // Get unique product IDs from both original sale (for restoring) and new sale (for deducting)
+                // --- Step 2: Read All Necessary Products ---
                 const allProductIds = new Set([
                     ...originalSaleDetails.map(item => item.productId),
                     ...saleItems.map(item => item.productId)
@@ -330,46 +321,59 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                 const productRefs = Array.from(allProductIds).map(id => doc(db, 'products', id));
                 const productDocs = await Promise.all(productRefs.map(ref => transaction.get(ref)));
 
-                const productDataMap = new Map<string, { exists: boolean, data: Product | null }>();
+                const productDataMap = new Map<string, { exists: boolean, data: Product | null, ref: any }>();
                 productDocs.forEach((docSnap, index) => {
                     const productId = Array.from(allProductIds)[index];
                     productDataMap.set(productId, {
                         exists: docSnap.exists(),
-                        data: docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as Product : null
+                        data: docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as Product : null,
+                        ref: productRefs[index] // Store the ref for writing later
                     });
                 });
 
-                // --- Step 3: Calculate Final Stock Adjustments ---
-                const stockAdjustments = new Map<string, number>(); // productId -> quantity change (+ve for restore, -ve for deduct)
+                // --- Step 3: Calculate Final Stock Adjustments & Validate ---
+                const stockAdjustments = new Map<string, number>(); // productId -> quantity change
 
-                // Restore stock from original sale (if editing)
+                // Restore stock from original sale
                 originalSaleDetails.forEach(item => {
                     stockAdjustments.set(item.productId, (stockAdjustments.get(item.productId) || 0) + item.quantity);
                 });
 
-                // Deduct stock for the new/updated sale
+                // Deduct stock for new sale & Validate
                 for (const item of saleItems) {
                     const currentAdjustment = stockAdjustments.get(item.productId) || 0;
                     stockAdjustments.set(item.productId, currentAdjustment - item.quantity);
 
-                    // Validate stock *after* calculating net change
                     const productInfo = productDataMap.get(item.productId);
                     if (!productInfo || !productInfo.exists) {
                         throw new Error(`Producto ${item.productName} (${item.productId}) no encontrado.`);
                     }
                     const currentQuantity = productInfo.data?.quantity ?? 0;
-                    const netChange = stockAdjustments.get(item.productId)!; // Should exist at this point
+                    const netChange = stockAdjustments.get(item.productId)!;
 
                     if (currentQuantity + netChange < 0) {
                          throw new Error(`Stock insuficiente para ${item.productName}. Disponible: ${currentQuantity}, Cambio Neto Requerido: ${netChange}`);
                     }
                 }
 
-                // --- Step 4: Create the New Sale Transaction ---
+                // --- Step 4: Perform Writes ---
+
+                // 4a. Cancel Original Sale (if editing)
+                if (isEditMode && originalSaleRef) {
+                    transaction.update(originalSaleRef, {
+                        isCancelled: true,
+                        cancelledAt: timestamp,
+                        cancelledBy: adminUser.uid,
+                        cancelledByName: adminUser.displayName || adminUser.email,
+                        cancellationReason: `Modificada por nueva venta ${timestamp.toMillis()}`,
+                    });
+                }
+
+                // 4b. Create New Sale Transaction
                 const newSaleTransactionRef = doc(collection(db, 'transactions'));
                 transaction.set(newSaleTransactionRef, {
                     userId: selectedUserId,
-                    type: 'purchase', // Sale is a purchase for customer
+                    type: 'purchase',
                     description: `Venta #${newSaleTransactionRef.id.substring(0, 6)}${isEditMode ? ' (Modificada)' : ''}`,
                     amount: saleTotal,
                     balanceAfter: 0, // Placeholder
@@ -378,30 +382,32 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                     addedByName: adminUser.displayName || adminUser.email,
                     isAdminAction: true,
                     isCancelled: false,
-                    isModified: isEditMode, // Mark as modified if editing
-                    modifiedAt: isEditMode ? timestamp : null, // Timestamp modification
+                    isModified: isEditMode,
+                    modifiedAt: isEditMode ? timestamp : null,
                     saleDetails: saleItems,
-                    // If editing, link to original? Maybe not necessary if cancelling old one
-                    // originalSaleId: originalSaleId,
                 });
 
-                // --- Step 5: Apply Stock Updates ---
+                // 4c. Apply Stock Updates
                 for (const [productId, quantityChange] of stockAdjustments.entries()) {
                     if (quantityChange !== 0) {
-                        const productRef = doc(db, 'products', productId);
                         const productInfo = productDataMap.get(productId);
-                        const currentQuantity = productInfo?.data?.quantity ?? 0;
-                        const newQuantity = currentQuantity + quantityChange;
-                        console.log(`Product ${productId}: Current ${currentQuantity}, Change ${quantityChange}, New ${newQuantity}`);
-                        transaction.update(productRef, { quantity: newQuantity });
+                        if (productInfo) { // Check if product info exists
+                            const currentQuantity = productInfo.data?.quantity ?? 0;
+                            const newQuantity = currentQuantity + quantityChange;
+                            console.log(`Product ${productId}: Current ${currentQuantity}, Change ${quantityChange}, New ${newQuantity}`);
+                            transaction.update(productInfo.ref, { quantity: newQuantity });
+                        } else {
+                            // This case should ideally not happen due to earlier checks, but log if it does
+                            console.warn(`Product info not found for ${productId} during stock update write.`);
+                        }
                     }
                 }
 
-                // User balance update is handled by recalculateBalance called after transaction
+                // Balance update is handled by the callback triggering recalculation
             });
 
-            // Call success callback (e.g., for recalculation) *after* the transaction commits
-            onSuccessCallback?.(); // Trigger recalculation
+            // Call success callback *after* the transaction commits
+            onSuccessCallback?.();
 
             toast({
                 title: `¡Venta ${isEditMode ? 'Modificada' : 'Registrada'}!`,
@@ -640,4 +646,3 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
 };
 
 export default SaleForm;
-
