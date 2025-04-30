@@ -3,7 +3,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowLeft, ShoppingCart, Banknote, Truck } from 'lucide-react'; // Import icons
+import { ArrowLeft, ShoppingCart, Banknote, Truck, CalendarDays } from 'lucide-react'; // Import icons, added CalendarDays
 
 // Page for Transaction Registration Options
 export default function AdminTransactionsPage() {
@@ -19,11 +19,11 @@ export default function AdminTransactionsPage() {
         {/* Main Card */}
         <Card className="shadow-md">
             <CardHeader>
-                <CardTitle className="text-2xl">Registrar Transacciones</CardTitle>
-                <CardDescription>Selecciona el tipo de transacción que deseas registrar.</CardDescription>
+                <CardTitle className="text-2xl">Registrar y Gestionar Transacciones</CardTitle>
+                <CardDescription>Selecciona el tipo de transacción que deseas registrar o gestionar.</CardDescription>
             </CardHeader>
             <CardContent>
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4"> {/* Changed grid layout to 2 cols */}
                     {/* Option 1: Ingresar Venta */}
                      <Link href="/admin/transactions/sale" passHref legacyBehavior>
                         <a className="block hover:no-underline">
@@ -68,8 +68,23 @@ export default function AdminTransactionsPage() {
                             </Card>
                          </a>
                     </Link>
+
+                    {/* Option 4: Ventas del Día */}
+                     <Link href="/admin/transactions/daily-sales" passHref legacyBehavior>
+                         <a className="block hover:no-underline">
+                             <Card className="hover:shadow-lg hover:border-primary transition-all duration-200 h-full flex flex-col text-center">
+                                <CardHeader className="items-center pb-2">
+                                     <CalendarDays className="h-8 w-8 text-primary mb-2" />
+                                    <CardTitle className="text-lg">Ventas del Día</CardTitle>
+                                </CardHeader>
+                                <CardContent className="pt-2 flex-grow">
+                                    <p className="text-sm text-muted-foreground">Ver, editar o cancelar las ventas realizadas hoy.</p>
+                                </CardContent>
+                            </Card>
+                         </a>
+                    </Link>
                  </div>
-                 <p className="text-center text-muted-foreground mt-6 text-xs">(Funcionalidad en desarrollo)</p>
+                 <p className="text-center text-muted-foreground mt-6 text-xs">(Funcionalidad en desarrollo para Cobranza y Compra)</p>
             </CardContent>
         </Card>
      </div>
