@@ -146,7 +146,18 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
 
        console.log("Starting barcode detection...");
       let animationFrameId: number;
-       const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['ean_13', 'upc_a', 'code_128'] }); // Add formats as needed
+       const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['aztec',
+    'code_128',
+    'code_39',
+    'code_93',
+    'data_matrix',
+    'ean_13',
+    'ean_8',
+    'itf',
+    'pdf417',
+    'qr_code',
+    'upc_a',
+    'upc_e'] }); // Add formats as needed
 
 
       const detectBarcode = async () => {

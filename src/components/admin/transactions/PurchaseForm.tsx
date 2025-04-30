@@ -131,6 +131,14 @@ const PurchaseForm: React.FC = () => {
 
           const detectBarcode = async () => {
               if (!videoRef.current || !videoRef.current.srcObject || !isScanning) return;
+
+              // Check if video is ready before detecting
+              if (videoRef.current.readyState < videoRef.current.HAVE_CURRENT_DATA) {
+                  console.log("Video not ready for detection, waiting...");
+                  animationFrameId = requestAnimationFrame(detectBarcode);
+                  return;
+              }
+
               try {
                 const barcodes = await barcodeDetector.detect(videoRef.current);
                 if (barcodes.length > 0 && barcodes[0].rawValue) {
@@ -154,12 +162,13 @@ const PurchaseForm: React.FC = () => {
                 }
               } catch (error) {
                 console.error("Error detecting barcode:", error);
+                // Continue scanning even if detection fails once
                 animationFrameId = requestAnimationFrame(detectBarcode);
               }
           };
           animationFrameId = requestAnimationFrame(detectBarcode);
           return () => cancelAnimationFrame(animationFrameId);
-       }, [isScanning, hasCameraPermission, products, toast, isBarcodeDetectorSupported]);
+       }, [isScanning, hasCameraPermission, products, toast, isBarcodeDetectorSupported]); // Added products as dependency
 
        const toggleScan = () => {
          if (!isBarcodeDetectorSupported) {
