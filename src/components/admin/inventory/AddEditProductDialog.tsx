@@ -36,6 +36,7 @@ import { cn } from '@/lib/utils'; // Import cn
 import { LoadingSpinner } from '@/components/ui/loading-spinner'; // Import LoadingSpinner
 
 
+// Make sellingPrice optional for minimal add scenario
 const productSchema = z.object({
   id: z.string().min(1, { message: 'El código de barras es requerido.' }), // Barcode as ID
   name: z.string().min(2, { message: 'El nombre debe tener al menos 2 caracteres.' }).max(100),
@@ -44,8 +45,8 @@ const productSchema = z.object({
     z.number().int().min(0, { message: 'La cantidad no puede ser negativa.' }).optional().default(0)
   ),
   sellingPrice: z.preprocess(
-    (val) => parseFloat(String(val).replace(/[^0-9.]+/g, "")), // Clean before validation
-    z.number().min(0, { message: 'El precio de venta no puede ser negativo.' })
+    (val) => val === '' || val === null || val === undefined ? undefined : parseFloat(String(val).replace(/[^0-9.]+/g, "")), // Handle empty string/null for optional
+    z.number().min(0, { message: 'El precio de venta no puede ser negativo.' }).optional() // Make optional
   ),
 });
 
@@ -54,8 +55,9 @@ type ProductFormValues = z.infer<typeof productSchema>;
 interface AddEditProductDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  product?: Product | null; // Product data for editing, null/undefined for adding
+  product?: Partial<Product> | null; // Allow partial product for prefilling ID
   onSuccessCallback?: (addedProduct: Product) => void; // Callback on successful add/edit
+  isMinimalAdd?: boolean; // New prop for minimal add mode (only name required)
 }
 
 const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
@@ -63,6 +65,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
   onClose,
   product,
   onSuccessCallback,
+  isMinimalAdd = false, // Default to false
 }) => {
   const { db } = useFirebase();
   const { toast } = useToast();
@@ -74,7 +77,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null); // For potentially drawing scan lines/results
 
 
-  const isEditMode = !!product && !!product.name; // Edit mode if product exists and has a name (distinguish from prefilling barcode)
+  const isEditMode = !!product && !!product.name && !isMinimalAdd; // Edit mode if product exists, has a name, and not minimal add
   const prefilledBarcode = product?.id && !product.name; // Check if only barcode is prefilled
 
   const form = useForm<ProductFormValues>({
@@ -83,7 +86,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
       id: '',
       name: '',
       quantity: 0,
-      sellingPrice: '' as any, // Initialize for controlled input
+      sellingPrice: undefined, // Initialize as undefined for optional field
     },
   });
 
@@ -191,30 +194,30 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
           id: product.id,
           name: product.name,
           quantity: product.quantity ?? 0,
-          sellingPrice: product.sellingPrice ?? '' as any,
+          sellingPrice: product.sellingPrice ?? undefined,
         });
-      } else if (prefilledBarcode && product) {
-           console.log("Prefilling barcode:", product.id);
+      } else if ((prefilledBarcode || isMinimalAdd) && product?.id) {
+           console.log("Prefilling barcode for minimal add:", product.id);
           form.reset({
               id: product.id, // Prefill ID
               name: '',
               quantity: 0,
-              sellingPrice: '' as any,
+              sellingPrice: undefined, // Default optional field
           });
       }
       else {
-         console.log("Resetting form for add");
+         console.log("Resetting form for standard add");
         form.reset({
           id: '',
           name: '',
           quantity: 0,
-          sellingPrice: '' as any,
+          sellingPrice: undefined,
         });
       }
        setIsScanning(false); // Ensure scanner is off initially
        setHasCameraPermission(null); // Reset permission status
     }
-  }, [isOpen, product, isEditMode, prefilledBarcode, form]);
+  }, [isOpen, product, isEditMode, prefilledBarcode, isMinimalAdd, form]);
 
 
   const handleClose = () => {
@@ -225,11 +228,15 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
   // --- Firestore Mutation ---
   const mutationFn = async (values: ProductFormValues): Promise<Product> => { // Return added/updated product
     const productRef = doc(db, 'products', values.id); // Use barcode as document ID
+
+    // Adjust sellingPrice for minimal add
+    const finalSellingPrice = isMinimalAdd ? 0 : (values.sellingPrice ?? 0); // Default to 0 if minimal add or undefined
+
     const finalData: Product = { // Construct final product data
         id: values.id,
         name: values.name,
-        quantity: values.quantity ?? 0,
-        sellingPrice: values.sellingPrice,
+        quantity: isMinimalAdd ? 0 : (values.quantity ?? 0), // Default quantity to 0 if minimal add
+        sellingPrice: finalSellingPrice,
         updatedAt: Timestamp.now(), // Set for both add and edit
     };
 
@@ -238,7 +245,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
        const updatePayload: Partial<Product> = {
           name: values.name,
           quantity: values.quantity ?? 0,
-          sellingPrice: values.sellingPrice,
+          sellingPrice: values.sellingPrice ?? 0, // Default to 0 if undefined during edit
           updatedAt: serverTimestamp(),
        };
       await updateDoc(productRef, updatePayload);
@@ -282,6 +289,11 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
 
   // --- Form Submission ---
   const onSubmit = (values: ProductFormValues) => {
+    // Validation for sellingPrice only if not minimal add
+    if (!isMinimalAdd && (values.sellingPrice === undefined || values.sellingPrice === null || isNaN(values.sellingPrice))) {
+        form.setError('sellingPrice', { type: 'manual', message: 'El precio de venta es requerido.' });
+        return;
+    }
     setIsSaving(true);
     console.log("Submitting product:", values);
     mutation.mutate(values);
@@ -305,7 +317,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
         <DialogHeader>
           <DialogTitle>{isEditMode ? 'Editar Producto' : 'Agregar Nuevo Producto'}</DialogTitle>
           <DialogDescription>
-            {isEditMode ? 'Modifica los detalles del producto.' : 'Ingresa los detalles del nuevo producto. Puedes escanear el código de barras.'}
+            {isEditMode ? 'Modifica los detalles del producto.' : (isMinimalAdd ? 'Ingresa el nombre del nuevo producto.' : 'Ingresa los detalles del nuevo producto. Puedes escanear el código de barras.')}
              {prefilledBarcode && <span className='block mt-1 text-sm text-primary'>Código de barras pre-llenado. Completa los demás datos.</span>}
           </DialogDescription>
         </DialogHeader>
@@ -359,12 +371,12 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
                             <Input
                                 placeholder="Escanea o ingresa el código"
                                 {...field}
-                                disabled={isSaving || isEditMode || isScanning} // Disable editing barcode in edit mode or while scanning
+                                disabled={isSaving || isEditMode || isScanning || isMinimalAdd} // Disable editing barcode in edit/minimal add/scanning modes
                                 className="font-mono text-sm"
                             />
                         </FormControl>
-                         {/* Show scan button only when adding and not already scanning */}
-                          {!isEditMode && (
+                         {/* Show scan button only when adding and not minimal/scanning */}
+                          {!isEditMode && !isMinimalAdd && (
                               <Button
                                 type="button"
                                 variant="outline"
@@ -378,7 +390,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
                             </Button>
                           )}
                         </div>
-                        {!isBarcodeDetectorSupported && !isEditMode && (
+                        {!isBarcodeDetectorSupported && !isEditMode && !isMinimalAdd && (
                             <p className="text-xs text-destructive mt-1">Escáner no compatible con este navegador.</p>
                         )}
                          <FormMessage />
@@ -386,7 +398,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
                 )}
                 />
 
-            {/* Other Fields */}
+            {/* Name Field */}
             <FormField
               control={form.control}
               name="name"
@@ -400,34 +412,37 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="quantity"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Cantidad</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="0" {...field} disabled={isSaving} min="0" step="1" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="sellingPrice"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Precio Venta</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="0.00" {...field} disabled={isSaving} min="0" step="0.01" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+             {/* Quantity and Price Fields (conditional) */}
+             {!isMinimalAdd && (
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="quantity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Cantidad</FormLabel>
+                        <FormControl>
+                          <Input type="number" placeholder="0" {...field} disabled={isSaving} min="0" step="1" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="sellingPrice"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Precio Venta</FormLabel>
+                        <FormControl>
+                          <Input type="number" placeholder="0.00" {...field} disabled={isSaving} min="0" step="0.01" value={field.value ?? ''} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+             )}
             <DialogFooter>
               <DialogClose asChild>
                  {/* Use the custom handleClose */}

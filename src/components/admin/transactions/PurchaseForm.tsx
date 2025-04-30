@@ -511,8 +511,9 @@ const PurchaseForm: React.FC = () => {
                     setIsAddProductDialogOpen(false);
                     setBarcodeToAdd(null); // Clear barcode when closing
                 }}
-                product={barcodeToAdd ? { id: barcodeToAdd, name: '', quantity: 0, sellingPrice: 0 } : null} // Pass barcode to prefill
+                product={barcodeToAdd ? { id: barcodeToAdd } : null} // Pass only ID for minimal add
                 onSuccessCallback={handleProductAdded} // Callback to handle added product
+                isMinimalAdd={true} // Trigger minimal add mode
             />
         </div>
     );
