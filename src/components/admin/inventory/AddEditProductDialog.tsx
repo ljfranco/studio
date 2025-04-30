@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Camera, ScanLine } from 'lucide-react';
+import { Loader2, Camera, ScanLine, Percent } from 'lucide-react'; // Added Percent
 import {
   Form,
   FormControl,
@@ -37,6 +37,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner'; // Import Load
 
 
 // Make sellingPrice optional for minimal add scenario
+// Add optional margin field
 const productSchema = z.object({
   id: z.string().min(1, { message: 'El código de barras es requerido.' }), // Barcode as ID
   name: z.string().min(2, { message: 'El nombre debe tener al menos 2 caracteres.' }).max(100),
@@ -47,6 +48,10 @@ const productSchema = z.object({
   sellingPrice: z.preprocess(
     (val) => val === '' || val === null || val === undefined ? undefined : parseFloat(String(val).replace(/[^0-9.]+/g, "")), // Handle empty string/null for optional
     z.number().min(0, { message: 'El precio de venta no puede ser negativo.' }).optional() // Make optional
+  ),
+  margin: z.preprocess(
+    (val) => val === '' || val === null || val === undefined ? undefined : parseFloat(String(val).replace(/[^0-9.]+/g, "")), // Handle empty string/null for optional
+    z.number().min(0, { message: 'El margen no puede ser negativo.' }).optional() // Make margin optional
   ),
 });
 
@@ -87,6 +92,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
       name: '',
       quantity: 0,
       sellingPrice: undefined, // Initialize as undefined for optional field
+      margin: undefined, // Initialize margin as undefined
     },
   });
 
@@ -165,6 +171,13 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
              console.log("Detection stopped or video not ready.");
              return;
           }
+          // Check video readiness before detecting
+           if (videoRef.current.readyState < videoRef.current.HAVE_METADATA || videoRef.current.videoWidth === 0) {
+             console.log("Video not ready for detection, retrying...");
+             animationFrameId = requestAnimationFrame(detectBarcode); // Retry detection
+             return;
+           }
+
 
           try {
             const barcodes = await barcodeDetector.detect(videoRef.current);
@@ -178,7 +191,10 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
               animationFrameId = requestAnimationFrame(detectBarcode);
             }
           } catch (error) {
-            console.error("Error detecting barcode:", error);
+             // Avoid logging the common InvalidStateError unless needed for debugging
+             if (!(error instanceof DOMException && error.name === 'InvalidStateError')) {
+                console.error("Error detecting barcode:", error);
+             }
             // Don't stop scanning on error, just log it
              animationFrameId = requestAnimationFrame(detectBarcode); // Try again
           }
@@ -206,6 +222,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
           name: product.name,
           quantity: product.quantity ?? 0,
           sellingPrice: product.sellingPrice ?? undefined,
+          margin: product.margin ?? undefined, // Reset margin in edit mode
         });
       } else if ((prefilledBarcode || isMinimalAdd) && product?.id) {
            console.log("Prefilling barcode for minimal add:", product.id);
@@ -214,6 +231,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
               name: '',
               quantity: 0,
               sellingPrice: undefined, // Default optional field
+              margin: undefined, // Default margin
           });
       }
       else {
@@ -223,6 +241,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
           name: '',
           quantity: 0,
           sellingPrice: undefined,
+          margin: undefined,
         });
       }
        setIsScanning(false); // Ensure scanner is off initially
@@ -240,27 +259,32 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
   const mutationFn = async (values: ProductFormValues): Promise<Product> => { // Return added/updated product
     const productRef = doc(db, 'products', values.id); // Use barcode as document ID
 
-    // Adjust sellingPrice for minimal add
+    // Adjust sellingPrice and margin for minimal add
     const finalSellingPrice = isMinimalAdd ? 0 : (values.sellingPrice ?? 0); // Default to 0 if minimal add or undefined
+    const finalMargin = isMinimalAdd ? undefined : (values.margin ?? undefined); // Default to undefined if minimal add or undefined
 
     const finalData: Product = { // Construct final product data
         id: values.id,
         name: values.name,
         quantity: isMinimalAdd ? 0 : (values.quantity ?? 0), // Default quantity to 0 if minimal add
         sellingPrice: finalSellingPrice,
+        margin: finalMargin, // Add margin to final data
         updatedAt: Timestamp.now(), // Set for both add and edit
+        // lastPurchasePrice is updated only via PurchaseForm
     };
 
-    if (isEditMode) {
+    if (isEditMode && product) {
       // Update existing document
        const updatePayload: Partial<Product> = {
           name: values.name,
           quantity: values.quantity ?? 0,
           sellingPrice: values.sellingPrice ?? 0, // Default to 0 if undefined during edit
+          margin: values.margin ?? undefined, // Include margin in update, allow undefined to remove
           updatedAt: serverTimestamp(),
        };
       await updateDoc(productRef, updatePayload);
       finalData.createdAt = product?.createdAt; // Preserve original createdAt if editing
+      finalData.lastPurchasePrice = product?.lastPurchasePrice; // Preserve last purchase price if editing
     } else {
         // Check if product already exists before adding
         const docSnap = await getDoc(productRef);
@@ -269,6 +293,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
         }
       // Add new document with createdAt timestamp
       finalData.createdAt = Timestamp.now();
+      finalData.lastPurchasePrice = undefined; // Ensure lastPurchasePrice is undefined for new products
       await setDoc(productRef, finalData); // Use finalData which includes ID
     }
      return finalData; // Return the full product data
@@ -305,6 +330,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
         form.setError('sellingPrice', { type: 'manual', message: 'El precio de venta es requerido.' });
         return;
     }
+    // No mandatory validation for margin
     setIsSaving(true);
     console.log("Submitting product:", values);
     mutation.mutate(values);
@@ -395,7 +421,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
                                 onClick={toggleScan}
                                 title={isScanning ? "Detener Escáner" : "Escanear Código"}
                                 disabled={isSaving || !isBarcodeDetectorSupported}
-                                className={cn(isScanning && "bg-destructive hover:bg-destructive/90 text-destructive-foreground")}
+                                className={cn("shrink-0", isScanning && "bg-destructive hover:bg-destructive/90 text-destructive-foreground")}
                             >
                                 <ScanLine className="h-5 w-5" />
                             </Button>
@@ -423,9 +449,9 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
                 </FormItem>
               )}
             />
-             {/* Quantity and Price Fields (conditional) */}
+             {/* Quantity, Price, and Margin Fields (conditional) */}
              {!isMinimalAdd && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4"> {/* Changed to 3 cols */}
                   <FormField
                     control={form.control}
                     name="quantity"
@@ -448,6 +474,31 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
                         <FormControl>
                           <Input type="number" placeholder="0.00" {...field} disabled={isSaving} min="0" step="0.01" value={field.value ?? ''} />
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                   <FormField
+                    control={form.control}
+                    name="margin"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Margen (%)</FormLabel>
+                        <div className="relative">
+                            <FormControl>
+                            <Input
+                                type="number"
+                                placeholder="0"
+                                {...field}
+                                disabled={isSaving}
+                                min="0"
+                                step="0.1"
+                                value={field.value ?? ''}
+                                className="pr-6" // Add padding for the icon
+                                />
+                            </FormControl>
+                            <Percent className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        </div>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -480,3 +531,4 @@ if (typeof window !== 'undefined' && !('BarcodeDetector' in window)) {
 
 
 export default AddEditProductDialog;
+

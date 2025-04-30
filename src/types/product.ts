@@ -11,7 +11,10 @@ export interface Product {
   name: string;
   quantity: number;
   sellingPrice: number;
+  lastPurchasePrice?: number; // New: Store the last purchase price
+  margin?: number; // New: Store the profit margin percentage
   purchasePrices?: Record<string, number>; // Map of distributorId -> purchase price
   createdAt?: Timestamp | Date;
   updatedAt?: Timestamp | Date;
 }
+

@@ -93,8 +93,11 @@ const ProductTable: React.FC = () => {
    };
 
   if (error) {
-    return <p className="text-center text-destructive">Error al cargar productos: {error.message}</p>;
+    // Check if error is an instance of Error before accessing message
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    return <p className="text-center text-destructive">Error al cargar productos: {errorMessage}</p>;
   }
+
 
   return (
     <Card>
@@ -120,6 +123,7 @@ const ProductTable: React.FC = () => {
                   <TableHead>Código Barras</TableHead>
                   <TableHead>Nombre</TableHead>
                   <TableHead className="text-right">Cantidad</TableHead>
+                  <TableHead className="text-right">Últ. P. Compra</TableHead> {/* New Column */}
                   <TableHead className="text-right">Precio Venta</TableHead>
                   <TableHead className="text-center">Acciones</TableHead>
                 </TableRow>
@@ -130,6 +134,9 @@ const ProductTable: React.FC = () => {
                     <TableCell className="font-mono text-xs">{product.id}</TableCell>
                     <TableCell className="font-medium">{product.name}</TableCell>
                     <TableCell className="text-right">{product.quantity ?? 0}</TableCell>
+                    <TableCell className="text-right text-muted-foreground"> {/* New Cell */}
+                        {formatCurrency(product.lastPurchasePrice ?? 0)}
+                    </TableCell>
                     <TableCell className="text-right">{formatCurrency(product.sellingPrice ?? 0)}</TableCell>
                     <TableCell className="text-center space-x-1">
                       <Button
@@ -149,7 +156,7 @@ const ProductTable: React.FC = () => {
                         title={`Eliminar ${product.name}`}
                         disabled={deleteMutation.isPending && productToDelete?.id === product.id}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        {deleteMutation.isPending && productToDelete?.id === product.id ? <LoadingSpinner size="sm"/> : <Trash2 className="h-4 w-4" />}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -193,3 +200,4 @@ const ProductTable: React.FC = () => {
 };
 
 export default ProductTable;
+
