@@ -1,3 +1,4 @@
+
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
@@ -18,6 +19,11 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+   // Enable experimental features if needed, e.g., for BarcodeDetector API
+  // experimental: {
+  //   // Add experimental flags here if necessary
+  // }
 };
 
 export default nextConfig;
+
