@@ -407,20 +407,23 @@ const DailySalesList: React.FC = () => {
 
             {/* Edit Sale Dialog */}
             <Dialog open={isEditSaleDialogOpen} onOpenChange={(open) => { if (!open) handleDialogClose(); }}>
-                <DialogContent className="sm:max-w-4xl">
+                <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col"> {/* Responsive adjustments */}
                      <DialogHeader>
                         <DialogTitle>Modificar Venta</DialogTitle>
                         <DialogDescription>
                             Modifica los productos o cantidades de esta venta. Se cancelará la venta original y se creará una nueva.
                         </DialogDescription>
                      </DialogHeader>
-                     {selectedTransaction && selectedTransaction.saleDetails && (
-                        <SaleForm
-                            saleToEdit={selectedTransaction}
-                            onClose={handleDialogClose}
-                            onSuccessCallback={handleActionSuccess}
-                        />
-                     )}
+                     {/* Make SaleForm scrollable */}
+                     <div className="flex-grow overflow-y-auto pr-2"> {/* Add padding-right for scrollbar */}
+                         {selectedTransaction && selectedTransaction.saleDetails && (
+                            <SaleForm
+                                saleToEdit={selectedTransaction}
+                                onClose={handleDialogClose}
+                                onSuccessCallback={handleActionSuccess}
+                            />
+                         )}
+                     </div>
                 </DialogContent>
             </Dialog>
 
