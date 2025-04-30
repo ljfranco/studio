@@ -24,8 +24,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import UserDetailView from '../UserDetailView'; // Need recalculateBalance from here temporarily
 
 
-// Special ID for the generic customer
-const CONSUMIDOR_FINAL_ID = '__CONSUMIDOR_FINAL__';
+// Special ID for the generic customer - Changed from reserved name
+const CONSUMIDOR_FINAL_ID = 'consumidor-final-id'; // Changed ID
 const CONSUMIDOR_FINAL_NAME = 'Consumidor Final';
 
 
@@ -43,7 +43,7 @@ const fetchUsers = async (db: any): Promise<UserData[]> => {
      users.unshift({ id: CONSUMIDOR_FINAL_ID, name: CONSUMIDOR_FINAL_NAME, email: '', balance: 0, isEnabled: true, role: 'user' });
 
      // Ensure the generic user document exists (run once or check on load)
-     const genericUserDocRef = doc(db, 'users', CONSUMIDOR_FINAL_ID);
+     const genericUserDocRef = doc(db, 'users', CONSUMIDOR_FINAL_ID); // Use new ID
      const genericDocSnap = await getDoc(genericUserDocRef);
      if (!genericDocSnap.exists()) {
         try {
@@ -205,8 +205,8 @@ const SaleForm: React.FC = () => {
             toast({ title: 'Error', description: 'Selecciona un producto y una cantidad válida.', variant: 'destructive' });
             return;
         }
-        if (quantity > selectedProduct.quantity) {
-            toast({ title: 'Stock Insuficiente', description: `Solo quedan ${selectedProduct.quantity} unidades de ${selectedProduct.name}.`, variant: 'destructive' });
+        if (quantity > (selectedProduct.quantity ?? 0)) { // Add nullish coalescing for quantity
+            toast({ title: 'Stock Insuficiente', description: `Solo quedan ${selectedProduct.quantity ?? 0} unidades de ${selectedProduct.name}.`, variant: 'destructive' });
             return;
         }
 
@@ -218,8 +218,8 @@ const SaleForm: React.FC = () => {
              // Update quantity and total if item exists
              const updatedItems = [...saleItems];
              const newQuantity = updatedItems[existingItemIndex].quantity + quantity;
-              if (newQuantity > selectedProduct.quantity) {
-                  toast({ title: 'Stock Insuficiente', description: `No puedes agregar ${quantity} más. Stock total ${selectedProduct.quantity}, ya en lista ${updatedItems[existingItemIndex].quantity}.`, variant: 'destructive' });
+              if (newQuantity > (selectedProduct.quantity ?? 0)) { // Add nullish coalescing
+                  toast({ title: 'Stock Insuficiente', description: `No puedes agregar ${quantity} más. Stock total ${selectedProduct.quantity ?? 0}, ya en lista ${updatedItems[existingItemIndex].quantity}.`, variant: 'destructive' });
                   return;
               }
              updatedItems[existingItemIndex] = {
@@ -377,7 +377,7 @@ const SaleForm: React.FC = () => {
 
 
     // --- Render Logic ---
-    if (error) return <p className="text-center text-destructive">Error al cargar datos: {error.message}</p>;
+    if (error) return <p className="text-center text-destructive">Error al cargar datos: {error instanceof Error ? error.message : 'Error desconocido'}</p>; // Check if error is Error instance
     if (isLoading) return <div className="flex justify-center p-4"><LoadingSpinner /></div>;
 
     return (
@@ -532,7 +532,10 @@ const SaleForm: React.FC = () => {
                     <div className='flex gap-2'>
                          <Button
                             variant="outline"
-                            onClick={() => setSaleItems([])} // Clear sale items
+                            onClick={() => {
+                                setSaleItems([]); // Clear sale items
+                                setSelectedUserId(''); // Reset customer selection
+                            }}
                             disabled={isSubmitting}
                          >
                              Cancelar Venta Actual
