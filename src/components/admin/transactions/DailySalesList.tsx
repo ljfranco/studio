@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'; // Added useMemo
@@ -10,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { formatCurrency, cn } from '@/lib/utils';
-import { Pencil, Trash2, ShoppingBag, Info, RotateCcw, RefreshCw } from 'lucide-react';
+import { Pencil, Trash2, ShoppingBag, Info, RotateCcw, RefreshCw, DollarSign } from 'lucide-react'; // Added DollarSign
 import SaleForm from './SaleForm'; // For editing
 import CancelTransactionDialog from '../CancelTransactionDialog'; // For cancelling
 import RestoreTransactionDialog from '../RestoreTransactionDialog'; // For restoring
@@ -18,6 +19,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { useToast } from '@/hooks/use-toast';
 import type { Transaction, SaleDetail } from '@/types/transaction';
 import type { UserData } from '@/types/user'; // Import UserData type
+import { Card, CardContent } from '@/components/ui/card'; // Import Card for total display
+
 
 // --- Helper function to get user names ---
 const fetchUserNames = async (db: any, userIds: string[]): Promise<Record<string, string>> => {
@@ -157,6 +160,14 @@ const DailySalesList: React.FC = () => {
     }, [db, adminUser, role, startOfToday, endOfToday, toast]);
 
 
+    // --- Calculate Total Sales ---
+    const totalSalesAmount = useMemo(() => {
+        return sales
+            .filter(sale => !sale.isCancelled) // Only include non-cancelled sales
+            .reduce((sum, sale) => sum + sale.amount, 0);
+    }, [sales]); // Recalculate whenever sales change
+
+
     // --- Recalculate Balance for Affected Users ---
     const recalculateBalancesForAffectedUsers = useCallback(async (affectedUserIds: string[], showToast: boolean = true) => {
         if (!db || !adminUser || role !== 'admin' || affectedUserIds.length === 0) return;
@@ -280,102 +291,119 @@ const DailySalesList: React.FC = () => {
         return <p className="text-center text-destructive">Acceso denegado.</p>;
     }
 
-    if (sales.length === 0 && !loading) { // Check loading state as well
-        return <p className="text-center text-muted-foreground">No se registraron ventas hoy.</p>;
-    }
 
     return (
         <>
-             <Button onClick={() => recalculateBalancesForAffectedUsers(sales.map(s => s.userId), true)} variant="outline" disabled={isRecalculating} className="mb-4">
-                {isRecalculating ? <LoadingSpinner size="sm" className="mr-2" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                Recalcular Saldos Afectados
-             </Button>
+            <div className="flex justify-between items-start mb-4 gap-4">
+                {/* Recalculate Button */}
+                <Button onClick={() => recalculateBalancesForAffectedUsers(sales.map(s => s.userId), true)} variant="outline" disabled={isRecalculating} className="shrink-0">
+                    {isRecalculating ? <LoadingSpinner size="sm" className="mr-2" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                    Recalcular Saldos
+                </Button>
 
-            <div className="overflow-x-auto">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Hora</TableHead>
-                            <TableHead>Cliente</TableHead>
-                            <TableHead>Descripción</TableHead>
-                            <TableHead className="text-right">Monto</TableHead>
-                            <TableHead className="text-center">Estado</TableHead>
-                            <TableHead className="text-center px-1">Detalle</TableHead>
-                            <TableHead className="text-center px-1">Acciones</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {sales.map((sale) => {
-                            const saleTime = sale.timestamp instanceof Timestamp ? sale.timestamp.toDate() : new Date();
-                            const formattedTime = format(saleTime, 'HH:mm:ss', { locale: es });
-                            const customerName = userNames[sale.userId] || sale.userId;
-                            const isCancelled = sale.isCancelled ?? false;
+                 {/* Total Sales Display */}
+                 <Card className="bg-primary/10 border-primary flex-grow">
+                    <CardContent className="p-3">
+                        <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium text-primary">Total Ventas del Día (Confirmadas)</p>
+                             <DollarSign className="h-5 w-5 text-primary" />
+                        </div>
+                        <p className="text-2xl font-bold text-primary">{formatCurrency(totalSalesAmount)}</p>
+                    </CardContent>
+                </Card>
+            </div>
 
-                            return (
-                                <TableRow key={sale.id} className={cn(isCancelled && "opacity-60")}>
-                                    <TableCell className={cn("whitespace-nowrap text-xs", isCancelled && "line-through")}>{formattedTime}</TableCell>
-                                    <TableCell className={cn(isCancelled && "line-through")}>{customerName}</TableCell>
-                                    <TableCell className={cn(isCancelled && "line-through")}>{sale.description}</TableCell>
-                                    <TableCell className={cn("text-right font-medium", isCancelled ? 'text-muted-foreground line-through' : 'text-destructive')}>
-                                        {formatCurrency(sale.amount)}
-                                    </TableCell>
-                                    <TableCell className="text-center">
-                                         <span className={cn("text-xs px-2 py-0.5 rounded-full",
-                                            isCancelled ? "bg-muted text-muted-foreground border border-dashed" : "bg-green-100 text-green-800")}>
-                                            {isCancelled ? 'Cancelada' : 'Confirmada'}
-                                        </span>
-                                        {/* Optionally show modified/restored status */}
-                                        {sale.isModified && !isCancelled && <Info className="h-3 w-3 inline-block ml-1 text-blue-500" title="Modificada"/>}
-                                        {sale.isRestored && <Info className="h-3 w-3 inline-block ml-1 text-orange-500" title="Restaurada"/>}
-                                    </TableCell>
-                                    <TableCell className="text-center px-1">
-                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenSaleDetail(sale)} title="Ver Detalle">
-                                            <ShoppingBag className="h-4 w-4 text-primary" />
-                                        </Button>
-                                    </TableCell>
-                                    <TableCell className="text-center px-1 space-x-1">
-                                        {!isCancelled ? (
-                                            <>
+
+            {sales.length === 0 && !loading ? (
+                <p className="text-center text-muted-foreground mt-6">No se registraron ventas hoy.</p>
+             ) : (
+                <div className="overflow-x-auto border rounded-md">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Hora</TableHead>
+                                <TableHead>Cliente</TableHead>
+                                <TableHead>Descripción</TableHead>
+                                <TableHead className="text-right">Monto</TableHead>
+                                <TableHead className="text-center">Estado</TableHead>
+                                <TableHead className="text-center px-1">Detalle</TableHead>
+                                <TableHead className="text-center px-1">Acciones</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {sales.map((sale) => {
+                                const saleTime = sale.timestamp instanceof Timestamp ? sale.timestamp.toDate() : new Date();
+                                const formattedTime = format(saleTime, 'HH:mm:ss', { locale: es });
+                                const customerName = userNames[sale.userId] || sale.userId;
+                                const isCancelled = sale.isCancelled ?? false;
+
+                                return (
+                                    <TableRow key={sale.id} className={cn(isCancelled && "opacity-60")}>
+                                        <TableCell className={cn("whitespace-nowrap text-xs", isCancelled && "line-through")}>{formattedTime}</TableCell>
+                                        <TableCell className={cn(isCancelled && "line-through")}>{customerName}</TableCell>
+                                        <TableCell className={cn(isCancelled && "line-through")}>{sale.description}</TableCell>
+                                        <TableCell className={cn("text-right font-medium", isCancelled ? 'text-muted-foreground line-through' : 'text-destructive')}>
+                                            {formatCurrency(sale.amount)}
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                             <span className={cn("text-xs px-2 py-0.5 rounded-full",
+                                                isCancelled ? "bg-muted text-muted-foreground border border-dashed" : "bg-green-100 text-green-800")}>
+                                                {isCancelled ? 'Cancelada' : 'Confirmada'}
+                                            </span>
+                                            {/* Optionally show modified/restored status */}
+                                            {sale.isModified && !isCancelled && <Info className="h-3 w-3 inline-block ml-1 text-blue-500" title="Modificada"/>}
+                                            {sale.isRestored && <Info className="h-3 w-3 inline-block ml-1 text-orange-500" title="Restaurada"/>}
+                                        </TableCell>
+                                        <TableCell className="text-center px-1">
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenSaleDetail(sale)} title="Ver Detalle">
+                                                <ShoppingBag className="h-4 w-4 text-primary" />
+                                            </Button>
+                                        </TableCell>
+                                        <TableCell className="text-center px-1 space-x-1">
+                                            {!isCancelled ? (
+                                                <>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => handleEditSale(sale)}
+                                                        aria-label={`Editar venta ${sale.id}`}
+                                                        className="h-7 w-7"
+                                                        disabled={isRecalculating}
+                                                    >
+                                                        <Pencil className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => handleCancel(sale)}
+                                                        aria-label={`Cancelar venta ${sale.id}`}
+                                                        className="h-7 w-7 text-destructive hover:text-destructive/90"
+                                                         disabled={isRecalculating}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </>
+                                            ) : (
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    onClick={() => handleEditSale(sale)}
-                                                    aria-label={`Editar venta ${sale.id}`}
-                                                    className="h-7 w-7"
+                                                    onClick={() => handleRestore(sale)}
+                                                    aria-label={`Restaurar venta ${sale.id}`}
+                                                    className="h-7 w-7 text-green-600 hover:text-green-700"
                                                     disabled={isRecalculating}
                                                 >
-                                                    <Pencil className="h-4 w-4" />
+                                                    <RotateCcw className="h-4 w-4" />
                                                 </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => handleCancel(sale)}
-                                                    aria-label={`Cancelar venta ${sale.id}`}
-                                                    className="h-7 w-7 text-destructive hover:text-destructive/90"
-                                                     disabled={isRecalculating}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </>
-                                        ) : (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => handleRestore(sale)}
-                                                aria-label={`Restaurar venta ${sale.id}`}
-                                                className="h-7 w-7 text-green-600 hover:text-green-700"
-                                                disabled={isRecalculating}
-                                            >
-                                                <RotateCcw className="h-4 w-4" />
-                                            </Button>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            );
-                        })}
-                    </TableBody>
-                </Table>
-            </div>
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
+                </div>
+            )}
+
 
             {/* Edit Sale Dialog */}
             <Dialog open={isEditSaleDialogOpen} onOpenChange={(open) => { if (!open) handleDialogClose(); }}>
