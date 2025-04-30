@@ -26,11 +26,20 @@ const fetchUserNames = async (db: any, userIds: string[]): Promise<Record<string
     const userMap: Record<string, string> = {};
     // Fetch in chunks if necessary, but for daily sales, the list might be manageable
     const usersRef = collection(db, 'users');
-    const q = query(usersRef, where('__name__', 'in', userIds)); // '__name__' is the document ID field
-    const userSnap = await getDocs(q);
-    userSnap.forEach(doc => {
-        userMap[doc.id] = doc.data().name || 'N/A';
-    });
+    // Firestore 'in' query supports up to 30 elements per query
+    // For larger lists, chunk the userIds array
+    const MAX_IDS_PER_QUERY = 30;
+    for (let i = 0; i < userIds.length; i += MAX_IDS_PER_QUERY) {
+        const chunk = userIds.slice(i, i + MAX_IDS_PER_QUERY);
+        if (chunk.length > 0) {
+            const q = query(usersRef, where('__name__', 'in', chunk)); // '__name__' is the document ID field
+            const userSnap = await getDocs(q);
+            userSnap.forEach(doc => {
+                userMap[doc.id] = doc.data().name || 'N/A';
+            });
+        }
+    }
+
     return userMap;
 };
 
@@ -54,8 +63,16 @@ const DailySalesList: React.FC = () => {
     const startOfToday = startOfDay(today);
     const endOfToday = endOfDay(today);
 
-    const fetchAndSetSales = useCallback(() => {
+    // Effect to fetch daily sales using snapshot listener
+    useEffect(() => {
+        if (!adminUser || role !== 'admin') {
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
+        console.log("Setting up snapshot listener for daily sales...");
+
         const transactionsColRef = collection(db, 'transactions');
         const q = query(
             transactionsColRef,
@@ -66,6 +83,7 @@ const DailySalesList: React.FC = () => {
         );
 
         const unsubscribe = onSnapshot(q, async (querySnapshot) => {
+            console.log(`Snapshot received with ${querySnapshot.docs.length} docs for daily sales.`);
             const fetchedSales = querySnapshot.docs
                 .map(doc => ({
                     id: doc.id,
@@ -73,34 +91,50 @@ const DailySalesList: React.FC = () => {
                 } as Transaction))
                 .filter(tx => tx.saleDetails && tx.saleDetails.length > 0); // Ensure it's a sale transaction
 
+            // Set sales state
             setSales(fetchedSales);
 
             // Fetch user names for the sales
             const userIds = Array.from(new Set(fetchedSales.map(sale => sale.userId)));
              if (userIds.length > 0) {
-                 const names = await fetchUserNames(db, userIds);
-                 setUserNames(names);
+                 try {
+                    console.log("Fetching names for user IDs:", userIds);
+                    const names = await fetchUserNames(db, userIds);
+                    // Set user names state only if it changes to avoid potential loops
+                    setUserNames(currentNames => {
+                        if (JSON.stringify(names) !== JSON.stringify(currentNames)) {
+                             console.log("Updating user names state.");
+                             return names;
+                        }
+                        return currentNames;
+                    });
+                 } catch (fetchError) {
+                     console.error("Error fetching user names:", fetchError);
+                     toast({ title: 'Error', description: 'No se pudieron cargar los nombres de los clientes.', variant: 'destructive' });
+                 }
+             } else {
+                 setUserNames({}); // Clear names if no sales
              }
 
             setLoading(false);
         }, (error) => {
-            console.error("Error fetching daily sales:", error);
-            toast({ title: 'Error', description: 'No se pudieron cargar las ventas del día.', variant: 'destructive' });
+            console.error("Error in snapshot listener for daily sales:", error);
+            toast({ title: 'Error', description: 'Error al actualizar las ventas del día.', variant: 'destructive' });
+            setSales([]); // Clear sales on error
+            setUserNames({});
             setLoading(false);
         });
 
-        return unsubscribe;
-    }, [db, startOfToday, endOfToday, toast]);
-
-
-    useEffect(() => {
-        if (!adminUser || role !== 'admin') {
-            setLoading(false);
-            return;
-        }
-        const unsubscribe = fetchAndSetSales();
-        return () => unsubscribe?.(); // Use optional chaining
-    }, [adminUser, role, db, fetchAndSetSales]);
+        // Cleanup function
+        return () => {
+            console.log("Unsubscribing from daily sales snapshot listener.");
+            unsubscribe();
+        };
+        // Dependencies: db, adminUser, role, startOfToday, endOfToday, toast
+        // Note: Using startOfDay/endOfDay derived from `new Date()` can cause re-renders if not stable.
+        // Consider memoizing these or passing them as props if the component re-renders frequently.
+        // For now, include them as they define the query range.
+    }, [db, adminUser, role, startOfToday, endOfToday, toast]);
 
 
     // --- Recalculate Balance for Affected Users ---
@@ -136,7 +170,13 @@ const DailySalesList: React.FC = () => {
                 });
 
                 const userDocRef = doc(db, 'users', userId);
-                batch.update(userDocRef, { balance: currentBalance }); // Update final balance on user doc
+                // Check if user doc exists before updating (optional, but safer)
+                 const userSnap = await getDoc(userDocRef); // Read outside batch for check
+                 if (userSnap.exists()) {
+                     batch.update(userDocRef, { balance: currentBalance }); // Update final balance on user doc
+                 } else {
+                      console.warn(`User document ${userId} not found during batch balance update.`);
+                 }
             }
 
             await batch.commit();
@@ -195,18 +235,13 @@ const DailySalesList: React.FC = () => {
     };
 
     // --- Success Callback for Dialogs ---
-    const handleActionSuccess = useCallback(() => {
-         // Trigger recalculation for the affected user(s) after an action
-         // If editing, potentially both old and new user if customer changed (though changing customer isn't allowed here)
-         // If cancelling/restoring, just the user of the transaction
+     const handleActionSuccess = useCallback(() => {
          if (selectedTransaction) {
-             recalculateBalancesForAffectedUsers([selectedTransaction.userId], false); // Recalculate without toast
-         } else {
-              // Fallback: refetch all daily sales if selectedTransaction is somehow null
-              fetchAndSetSales();
+             recalculateBalancesForAffectedUsers([selectedTransaction.userId], false);
          }
-        // Dialog close is handled within the dialog component or handleDialogClose
-    }, [selectedTransaction, recalculateBalancesForAffectedUsers, fetchAndSetSales]); // Add fetchAndSetSales
+         // No need to manually refetch sales here, the snapshot listener will update the state
+         handleDialogClose(); // Ensure dialog closes after action
+     }, [selectedTransaction, recalculateBalancesForAffectedUsers]);
 
 
     if (loading) {
@@ -217,7 +252,7 @@ const DailySalesList: React.FC = () => {
         return <p className="text-center text-destructive">Acceso denegado.</p>;
     }
 
-    if (sales.length === 0) {
+    if (sales.length === 0 && !loading) { // Check loading state as well
         return <p className="text-center text-muted-foreground">No se registraron ventas hoy.</p>;
     }
 
