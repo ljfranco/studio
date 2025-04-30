@@ -19,9 +19,9 @@ export default function RegisterPurchasePage() {
 
         <Card className="shadow-md">
             <CardHeader>
-                <CardTitle className="text-2xl">Registrar Nueva Compra de Mercadería</CardTitle>
+                <CardTitle className="text-2xl">Registrar Ingreso de Mercadería</CardTitle>
                 <CardDescription>
-                    Selecciona un proveedor, agrega productos, cantidades y precios de costo.
+                    Agrega productos, cantidades y precios de costo para actualizar el stock.
                 </CardDescription>
             </CardHeader>
             <CardContent>

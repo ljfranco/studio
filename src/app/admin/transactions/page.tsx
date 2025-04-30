@@ -38,7 +38,7 @@ export default function AdminTransactionsPage() {
                     </Link>
 
                     {/* Option 2: Ingresar Cobranza */}
-                    <Link href="/admin/transactions/collection" className="block hover:no-underline"> {/* Updated href */}
+                    <Link href="/admin/transactions/collection" className="block hover:no-underline">
                         <Card className="hover:shadow-lg hover:border-primary transition-all duration-200 h-full flex flex-col text-center">
                             <CardHeader className="items-center pb-2">
                                  <Banknote className="h-8 w-8 text-primary mb-2" />
@@ -58,7 +58,7 @@ export default function AdminTransactionsPage() {
                                 <CardTitle className="text-lg">Ingresar Compra</CardTitle>
                             </CardHeader>
                             <CardContent className="pt-2 flex-grow">
-                                <p className="text-sm text-muted-foreground">Registra una compra de mercadería a un proveedor.</p>
+                                <p className="text-sm text-muted-foreground">Registra el ingreso de mercadería y actualiza el stock.</p>
                             </CardContent>
                         </Card>
                     </Link>

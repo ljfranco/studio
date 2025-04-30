@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -9,19 +8,19 @@ import { collection, getDocs, doc, runTransaction, Timestamp, writeBatch, query,
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+// Removed Select import as distributor is removed
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Combobox } from '@/components/ui/combobox';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency, cn } from '@/lib/utils';
-import { PlusCircle, ScanLine, Trash2, Camera, Ban, Truck } from 'lucide-react'; // Added Truck icon
+import { PlusCircle, ScanLine, Trash2, Camera, Ban, Truck } from 'lucide-react';
 import type { User as AuthUser } from 'firebase/auth';
 import type { Product } from '@/types/product';
-import type { Distributor } from '@/types/distributor'; // Import Distributor type
-import type { Transaction } from '@/types/transaction'; // Only needed if logging purchase transactions
+// Removed Distributor import
+import type { Transaction } from '@/types/transaction';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import AddEditProductDialog from '../inventory/AddEditProductDialog'; // Import dialog for adding products
+import AddEditProductDialog from '../inventory/AddEditProductDialog';
 
 // Define the structure for items in the purchase list
 interface PurchaseItem {
@@ -33,12 +32,7 @@ interface PurchaseItem {
 }
 
 // --- Fetching Functions ---
-const fetchDistributors = async (db: any): Promise<Distributor[]> => {
-    const distributorsCol = collection(db, 'distributors');
-    const q = query(distributorsCol, orderBy('name'));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Distributor));
-};
+// Removed fetchDistributors
 
 const fetchProducts = async (db: any): Promise<Product[]> => {
     const productsCol = collection(db, 'products');
@@ -52,7 +46,7 @@ const PurchaseForm: React.FC = () => {
     const { user: adminUser } = useAuth(); // Admin performing the purchase
     const { toast } = useToast();
     const queryClient = useQueryClient();
-    const [selectedDistributorId, setSelectedDistributorId] = useState<string>('');
+    // Removed selectedDistributorId state
     const [purchaseItems, setPurchaseItems] = useState<PurchaseItem[]>([]);
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [quantity, setQuantity] = useState<number>(1);
@@ -64,23 +58,19 @@ const PurchaseForm: React.FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [searchText, setSearchText] = useState('');
     const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
-    const [barcodeToAdd, setBarcodeToAdd] = useState<string | null>(null); // Store barcode if product not found
+    const [barcodeToAdd, setBarcodeToAdd] = useState<string | null>(null);
 
 
     // --- Data Fetching ---
-    const { data: distributors = [], isLoading: isLoadingDistributors, error: errorDistributors } = useQuery<Distributor[]>({
-        queryKey: ['distributors'],
-        queryFn: () => fetchDistributors(db),
-        staleTime: 1000 * 60 * 5,
-    });
+    // Removed distributor query
 
     const { data: products = [], isLoading: isLoadingProducts, error: errorProducts } = useQuery<Product[]>({
         queryKey: ['products'],
         queryFn: () => fetchProducts(db),
     });
 
-    const isLoading = isLoadingDistributors || isLoadingProducts;
-    const error = errorDistributors || errorProducts;
+    const isLoading = isLoadingProducts; // Adjusted loading state
+    const error = errorProducts; // Adjusted error state
 
      // --- Product Search ---
      const productOptions = useMemo(() => {
@@ -99,12 +89,8 @@ const PurchaseForm: React.FC = () => {
         const product = products.find(p => p.id === barcode);
         setSelectedProduct(product || null);
         setSearchText(product ? `${product.name} (${product.id})` : '');
-        // Pre-fill purchase price if available for the selected distributor
-        if (product && selectedDistributorId && product.purchasePrices?.[selectedDistributorId] !== undefined) {
-             setPurchasePrice(String(product.purchasePrices[selectedDistributorId]));
-        } else {
-             setPurchasePrice(''); // Clear if no price or distributor selected
-        }
+        // Removed pre-filling price based on distributor
+        setPurchasePrice(''); // Clear price on new product selection
      };
 
 
@@ -154,12 +140,8 @@ const PurchaseForm: React.FC = () => {
                   if (product) {
                       setSelectedProduct(product);
                       setSearchText(`${product.name} (${product.id})`);
-                      // Pre-fill price
-                      if (selectedDistributorId && product.purchasePrices?.[selectedDistributorId] !== undefined) {
-                          setPurchasePrice(String(product.purchasePrices[selectedDistributorId]));
-                      } else {
-                          setPurchasePrice('');
-                      }
+                      // Removed pre-fill price logic based on distributor
+                      setPurchasePrice(''); // Clear price field
                       toast({ title: "Código Detectado", description: `${product.name}` });
                   } else {
                        // Product not found, prompt to add
@@ -177,7 +159,7 @@ const PurchaseForm: React.FC = () => {
           };
           animationFrameId = requestAnimationFrame(detectBarcode);
           return () => cancelAnimationFrame(animationFrameId);
-       }, [isScanning, hasCameraPermission, products, toast, isBarcodeDetectorSupported, selectedDistributorId]); // Add selectedDistributorId dependency
+       }, [isScanning, hasCameraPermission, products, toast, isBarcodeDetectorSupported]); // Removed selectedDistributorId dependency
 
        const toggleScan = () => {
          if (!isBarcodeDetectorSupported) {
@@ -208,13 +190,13 @@ const PurchaseForm: React.FC = () => {
         let updatedItems;
 
         if (existingItem) {
-            // Update existing item's quantity and price if it changed
+            // Update existing item's quantity and potentially price
             updatedItems = purchaseItems.map(item =>
                 item.productId === selectedProduct.id
                     ? {
                         ...item,
                         quantity: item.quantity + quantity,
-                        purchasePrice: price, // Update price potentially
+                        purchasePrice: price, // Update price to the newly entered one
                         totalCost: (item.quantity + quantity) * price
                       }
                     : item
@@ -249,10 +231,7 @@ const PurchaseForm: React.FC = () => {
 
     // --- Submit Purchase ---
     const handleSubmitPurchase = async () => {
-        if (!selectedDistributorId) {
-            toast({ title: 'Error', description: 'Selecciona un proveedor.', variant: 'destructive' });
-            return;
-        }
+        // Removed distributor check
         if (purchaseItems.length === 0) {
             toast({ title: 'Error', description: 'Agrega al menos un producto a la compra.', variant: 'destructive' });
             return;
@@ -273,45 +252,32 @@ const PurchaseForm: React.FC = () => {
                 const productSnap = await getDoc(productRef); // Need to read current quantity
 
                 if (!productSnap.exists()) {
-                     // This shouldn't happen if products are added before purchase, but handle defensively
                      console.warn(`Product ${item.productId} not found during purchase submission. Skipping update.`);
-                     continue; // Or throw an error: throw new Error(`Producto ${item.productName} no encontrado.`);
+                     continue;
                 }
 
                 const currentQuantity = productSnap.data()?.quantity ?? 0;
                 const newQuantity = currentQuantity + item.quantity;
 
-                // Prepare product update
+                // Prepare product update - ONLY update quantity and timestamp
                 batch.update(productRef, {
                     quantity: newQuantity,
-                    [`purchasePrices.${selectedDistributorId}`]: item.purchasePrice, // Update or set the purchase price for this distributor
+                    // Removed purchase price update based on distributor
                     updatedAt: timestamp, // Update product timestamp
                 });
             }
 
-            // TODO: Optionally log the purchase itself as a separate 'purchase_log' transaction
-            // This would require creating a new collection and document structure for purchase logs.
-            // Example:
-            // const purchaseLogRef = doc(collection(db, 'purchaseLogs'));
-            // batch.set(purchaseLogRef, {
-            //     distributorId: selectedDistributorId,
-            //     distributorName: distributors.find(d => d.id === selectedDistributorId)?.name,
-            //     items: purchaseItems,
-            //     totalCost: purchaseTotal,
-            //     purchasedAt: timestamp,
-            //     purchasedBy: adminUser.uid,
-            //     purchasedByName: adminUser.displayName || adminUser.email,
-            // });
+            // Removed optional purchase log for simplicity based on the request
 
             await batch.commit();
 
             toast({
-                title: '¡Compra Registrada!',
-                description: `Compra por ${formatCurrency(purchaseTotal)} registrada. Stock actualizado.`,
+                title: '¡Stock Actualizado!',
+                description: `Ingreso de mercadería por ${formatCurrency(purchaseTotal)} registrado. Stock actualizado.`,
             });
 
             // Reset form state
-            setSelectedDistributorId('');
+            // Removed distributor reset
             setPurchaseItems([]);
             setSelectedProduct(null);
             setSearchText('');
@@ -323,7 +289,7 @@ const PurchaseForm: React.FC = () => {
         } catch (error) {
             console.error("Error submitting purchase:", error);
             toast({
-                title: 'Error al Registrar Compra',
+                title: 'Error al Registrar Ingreso',
                 description: `No se pudo completar la operación. ${error instanceof Error ? error.message : String(error)}`,
                 variant: 'destructive',
             });
@@ -334,25 +300,18 @@ const PurchaseForm: React.FC = () => {
 
      // --- Handler for when a new product is added via the dialog ---
      const handleProductAdded = useCallback((newProduct: Product) => {
-         // Invalidate and refetch products query to include the new one
          queryClient.invalidateQueries({ queryKey: ['products'] }).then(() => {
-             // After refetch, find the new product and select it
              queryClient.getQueryData<Product[]>(['products'])?.then((updatedProducts) => {
                  const addedProduct = updatedProducts?.find(p => p.id === newProduct.id);
                  if (addedProduct) {
                      setSelectedProduct(addedProduct);
                      setSearchText(`${addedProduct.name} (${addedProduct.id})`);
-                      // Optionally pre-fill price if a distributor is selected
-                      if (selectedDistributorId && addedProduct.purchasePrices?.[selectedDistributorId] !== undefined) {
-                          setPurchasePrice(String(addedProduct.purchasePrices[selectedDistributorId]));
-                      } else {
-                          setPurchasePrice('');
-                      }
+                     setPurchasePrice(''); // Clear price field
                  }
              });
          });
-         setBarcodeToAdd(null); // Clear the barcode after handling
-     }, [queryClient, selectedDistributorId]);
+         setBarcodeToAdd(null);
+     }, [queryClient]); // Removed selectedDistributorId dependency
 
 
     // --- Render Logic ---
@@ -361,40 +320,11 @@ const PurchaseForm: React.FC = () => {
 
     return (
         <div className="space-y-6">
-             {/* Distributor Selection */}
-             <div>
-                <Label htmlFor="distributor-select">Proveedor</Label>
-                <Select
-                    value={selectedDistributorId}
-                    onValueChange={(value) => {
-                        setSelectedDistributorId(value);
-                        // Clear purchase price when distributor changes, unless product is selected
-                        if (selectedProduct && value && selectedProduct.purchasePrices?.[value] !== undefined) {
-                             setPurchasePrice(String(selectedProduct.purchasePrices[value]));
-                        } else {
-                            setPurchasePrice('');
-                        }
-                    }}
-                    disabled={isSubmitting || purchaseItems.length > 0} // Disable if items added
-                >
-                    <SelectTrigger id="distributor-select">
-                        <SelectValue placeholder="Selecciona un proveedor..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {distributors.map((dist) => (
-                            <SelectItem key={dist.id} value={dist.id}>
-                                {dist.name}
-                            </SelectItem>
-                        ))}
-                        {distributors.length === 0 && <div className="p-4 text-sm text-muted-foreground">No hay proveedores registrados.</div>}
-                    </SelectContent>
-                </Select>
-                 {purchaseItems.length > 0 && <p className="text-xs text-muted-foreground mt-1">Proveedor bloqueado hasta finalizar o cancelar la compra actual.</p>}
-             </div>
+             {/* Distributor Selection Removed */}
 
              {/* Add Product Section */}
             <div className="border p-4 rounded-md space-y-4 bg-secondary/50">
-                 <h3 className="text-lg font-medium mb-2">Agregar Producto a la Compra</h3>
+                 <h3 className="text-lg font-medium mb-2">Agregar Producto Comprado</h3>
 
                   {/* Scanner Section */}
                  {isScanning && (
@@ -444,7 +374,7 @@ const PurchaseForm: React.FC = () => {
                           {!isBarcodeDetectorSupported && (
                             <p className="text-xs text-destructive mt-1">Escáner no compatible.</p>
                           )}
-                          {/* Add New Product Button (appears if search yields no results but text exists) */}
+                          {/* Add New Product Button */}
                           {searchText && !selectedProduct && filteredProductOptions.length === 0 && !isLoadingProducts && (
                             <Button
                                 type="button"
@@ -491,7 +421,7 @@ const PurchaseForm: React.FC = () => {
                         type="button"
                         onClick={handleAddItem}
                         disabled={!selectedProduct || quantity <= 0 || !purchasePrice || isSubmitting}
-                        className="w-full sm:w-auto shrink-0" // Prevent button from shrinking too much
+                        className="w-full sm:w-auto shrink-0"
                      >
                         <PlusCircle className="mr-2 h-4 w-4" /> Agregar
                     </Button>
@@ -544,26 +474,26 @@ const PurchaseForm: React.FC = () => {
              {/* Total and Submit */}
              {purchaseItems.length > 0 && (
                 <div className="flex flex-col items-end space-y-4 mt-4 sticky bottom-0 bg-background py-4 px-6 border-t">
-                    <p className="text-xl font-bold">Total Compra: {formatCurrency(purchaseTotal)}</p>
+                    <p className="text-xl font-bold">Total Ingreso: {formatCurrency(purchaseTotal)}</p>
                     <div className='flex gap-2'>
                         <Button
                             variant="outline"
                             onClick={() => {
                                 setPurchaseItems([]);
-                                setSelectedDistributorId(''); // Reset selection
+                                // Removed distributor reset
                             }}
                             disabled={isSubmitting}
                         >
-                            Cancelar Compra Actual
+                            Cancelar Ingreso Actual
                         </Button>
                         <Button
                             onClick={handleSubmitPurchase}
-                            disabled={isSubmitting || purchaseItems.length === 0 || !selectedDistributorId}
+                            disabled={isSubmitting || purchaseItems.length === 0} // Removed distributor check
                             size="lg"
                         >
                             {isSubmitting
                                 ? <LoadingSpinner className="mr-2" />
-                                : <><Truck className="mr-2 h-4 w-4" /> Confirmar Compra</>
+                                : <><Truck className="mr-2 h-4 w-4" /> Confirmar Ingreso</>
                             }
                         </Button>
                     </div>
