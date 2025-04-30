@@ -101,7 +101,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
 
 
   // --- Recalculate Balance Logic ---
-   const recalculateBalance = useCallback(async () => {
+   const recalculateBalance = useCallback(async (showToast: boolean = true) => {
         if (!userId || !db || !adminUser || role !== 'admin') return;
 
         setIsRecalculating(true);
@@ -148,19 +148,23 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
             // Commit the batch updates
             await batch.commit();
 
-            toast({
-                title: "Éxito",
-                description: "Saldo y movimientos recalculados correctamente.",
-            });
+             if (showToast) {
+                toast({
+                    title: "Éxito",
+                    description: "Saldo y movimientos recalculados correctamente.",
+                });
+             }
             console.log("Recalculation complete.");
 
         } catch (error) {
             console.error("Error recalculating balance:", error);
-            toast({
-                title: "Error",
-                description: `No se pudo recalcular el saldo. ${error instanceof Error ? error.message : String(error)}`,
-                variant: "destructive",
-            });
+             if (showToast) {
+                toast({
+                    title: "Error",
+                    description: `No se pudo recalcular el saldo. ${error instanceof Error ? error.message : String(error)}`,
+                    variant: "destructive",
+                });
+             }
         } finally {
             setIsRecalculating(false);
             console.log("Recalculation finished (finally block).");
@@ -193,6 +197,12 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
     // Recalculation is now handled by the onSuccessCallback in the dialogs
   };
 
+   // Define a callback for dialogs to trigger recalculation without a toast
+   const handleActionSuccess = useCallback(() => {
+       console.log("Action successful, triggering recalculation without toast...");
+       recalculateBalance(false); // Pass false to suppress the toast
+   }, [recalculateBalance]);
+
   // --- Render Logic ---
   if (authLoading || loadingData) {
     return <div className="flex justify-center items-center h-[calc(100vh-10rem)]"><LoadingSpinner size="lg" /></div>;
@@ -206,7 +216,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
      return (
         <div className="text-center space-y-4">
              <p className="text-destructive">No se encontró el usuario.</p>
-             <Link href="/admin" passHref>
+             <Link href="/admin/accounts" passHref> {/* Changed link to accounts page */}
                  <Button variant="outline">
                     <ArrowLeft className="mr-2 h-4 w-4" /> Volver al listado
                  </Button>
@@ -218,12 +228,12 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
   return (
     <div className="space-y-6">
         <div className="flex justify-between items-center mb-4">
-            <Link href="/admin" passHref>
+            <Link href="/admin/accounts" passHref> {/* Changed link to accounts page */}
                 <Button variant="outline">
                 <ArrowLeft className="mr-2 h-4 w-4" /> Volver al listado
                 </Button>
             </Link>
-             <Button onClick={recalculateBalance} variant="outline" disabled={isRecalculating}>
+             <Button onClick={() => recalculateBalance(true)} variant="outline" disabled={isRecalculating}> {/* Explicitly pass true for manual recalc */}
                 {isRecalculating ? <LoadingSpinner size="sm" className="mr-2" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                 Recalcular Saldo
              </Button>
@@ -275,7 +285,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
             type="purchase"
             targetUserId={userId}
             isAdminAction={true}
-            onSuccessCallback={recalculateBalance} // Recalculate after adding
+            onSuccessCallback={handleActionSuccess} // Use success callback
        />
        <AddTransactionDialog
             isOpen={isAddPaymentOpen}
@@ -283,7 +293,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
             type="payment"
             targetUserId={userId}
             isAdminAction={true}
-            onSuccessCallback={recalculateBalance} // Recalculate after adding
+            onSuccessCallback={handleActionSuccess} // Use success callback
        />
 
        {selectedTransaction && (
@@ -293,21 +303,21 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
                 onClose={handleDialogClose}
                 transaction={selectedTransaction}
                 adminUser={adminUser}
-                onSuccessCallback={recalculateBalance} // Pass recalculateBalance here
+                onSuccessCallback={handleActionSuccess} // Use success callback
             />
             <CancelTransactionDialog
                 isOpen={isCancelDialogOpen}
                 onClose={handleDialogClose}
                 transaction={selectedTransaction}
                 adminUser={adminUser}
-                onSuccessCallback={recalculateBalance} // Pass recalculateBalance here
+                onSuccessCallback={handleActionSuccess} // Use success callback
             />
             <RestoreTransactionDialog
                 isOpen={isRestoreDialogOpen}
                 onClose={handleDialogClose}
                 transaction={selectedTransaction}
                 adminUser={adminUser}
-                onSuccessCallback={recalculateBalance} // Pass recalculateBalance here
+                onSuccessCallback={handleActionSuccess} // Use success callback
             />
         </>
        )}
