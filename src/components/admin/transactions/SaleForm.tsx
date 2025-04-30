@@ -306,12 +306,34 @@ const SaleForm: React.FC = () => {
         setIsSubmitting(true);
 
         try {
-             await runTransaction(db, async (transaction) => {
+            await runTransaction(db, async (transaction) => {
                 const saleTransactionRef = doc(collection(db, 'transactions')); // New transaction for the sale
                 const timestamp = Timestamp.now();
 
-                 // 1. Create the main sale transaction document
-                 transaction.set(saleTransactionRef, {
+                // 1. Read all product documents first
+                const productRefs = saleItems.map(item => doc(db, 'products', item.productId));
+                const productDocs = await Promise.all(productRefs.map(ref => transaction.get(ref)));
+
+                const productDataMap = new Map<string, Product>();
+                productDocs.forEach((docSnap, index) => {
+                    if (!docSnap.exists()) {
+                        throw new Error(`Producto ${saleItems[index].productName} (${saleItems[index].productId}) no encontrado.`);
+                    }
+                    productDataMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as Product);
+                });
+
+                // 2. Validate stock based on read data
+                for (const item of saleItems) {
+                    const productData = productDataMap.get(item.productId);
+                    const currentQuantity = productData?.quantity ?? 0;
+                    if (item.quantity > currentQuantity) {
+                        throw new Error(`Stock insuficiente para ${item.productName}. Disponible: ${currentQuantity}, Venta: ${item.quantity}`);
+                    }
+                }
+
+                // 3. Perform all writes
+                // Create the main sale transaction document
+                transaction.set(saleTransactionRef, {
                     userId: selectedUserId,
                     type: 'purchase', // A sale is a 'purchase' for the customer's account
                     description: `Venta #${saleTransactionRef.id.substring(0, 6)}`, // Auto-generated description
@@ -326,42 +348,37 @@ const SaleForm: React.FC = () => {
                     saleDetails: saleItems, // Embed sale details
                 });
 
-                 // 2. Update product quantities (decrement stock)
-                 for (const item of saleItems) {
+                // Update product quantities (decrement stock)
+                for (const item of saleItems) {
                     const productRef = doc(db, 'products', item.productId);
-                    const productDoc = await transaction.get(productRef);
-                    if (!productDoc.exists()) {
-                        throw new Error(`Producto ${item.productName} (${item.productId}) no encontrado.`);
-                    }
-                    const currentQuantity = productDoc.data()?.quantity ?? 0;
+                    const productData = productDataMap.get(item.productId);
+                    const currentQuantity = productData?.quantity ?? 0;
                     const newQuantity = currentQuantity - item.quantity;
-                    if (newQuantity < 0) {
-                         // This should be caught earlier, but double-check here
-                        throw new Error(`Stock insuficiente para ${item.productName}. Disponible: ${currentQuantity}, Venta: ${item.quantity}`);
-                    }
+                    // No need to check stock again here as it was validated before writes
                     transaction.update(productRef, { quantity: newQuantity });
-                 }
+                }
 
-                 // 3. User balance update is handled by recalculateBalance called after transaction
-             });
+                // User balance update is handled by recalculateBalance called after transaction
+            });
 
-             // Recalculate balance for the affected user *after* the transaction commits
-             await recalculateBalance(selectedUserId, false); // Recalculate silently
+            // Recalculate balance for the affected user *after* the transaction commits
+            await recalculateBalance(selectedUserId, false); // Recalculate silently
 
-             toast({
+            toast({
                 title: '¡Venta Registrada!',
                 description: `Venta por ${formatCurrency(saleTotal)} registrada para ${users.find(u => u.id === selectedUserId)?.name}.`,
             });
 
-             // Reset form state
-             setSelectedUserId('');
-             setSaleItems([]);
-             setSelectedProduct(null);
-             setSearchText('');
-             setQuantity(1);
-             queryClient.invalidateQueries({ queryKey: ['products'] }); // Invalidate products to update stock display
-             queryClient.invalidateQueries({ queryKey: ['transactions', selectedUserId] }); // Invalidate transactions for the user
-             queryClient.invalidateQueries({ queryKey: ['userBalance', selectedUserId] }); // Invalidate user balance if cached separately
+            // Reset form state
+            setSelectedUserId('');
+            setSaleItems([]);
+            setSelectedProduct(null);
+            setSearchText('');
+            setQuantity(1);
+            queryClient.invalidateQueries({ queryKey: ['products'] }); // Invalidate products to update stock display
+            queryClient.invalidateQueries({ queryKey: ['transactions', selectedUserId] }); // Invalidate transactions for the user
+            queryClient.invalidateQueries({ queryKey: ['userBalance', selectedUserId] }); // Invalidate user balance if cached separately
+            queryClient.invalidateQueries({ queryKey: ['saleUsers'] }); // Invalidate users potentially?
 
         } catch (error) {
             console.error("Error submitting sale:", error);
@@ -555,3 +572,4 @@ const SaleForm: React.FC = () => {
 };
 
 export default SaleForm;
+
