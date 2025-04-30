@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Users, ListChecks, Package, FileText, LineChart } from 'lucide-react'; // Added relevant icons
+import { Users, ListChecks, Package, FileText, LineChart, Receipt } from 'lucide-react'; // Added Receipt icon
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 const AdminDashboard: React.FC = () => {
@@ -25,6 +25,7 @@ const AdminDashboard: React.FC = () => {
         { title: 'Estados de Cuenta', href: '/admin/accounts', icon: ListChecks, description: 'Ver y gestionar saldos de clientes.' },
         { title: 'Inventario Productos', href: '/admin/inventory', icon: Package, description: 'Gestionar stock y precios.' },
         { title: 'Registrar Transacciones', href: '/admin/transactions', icon: FileText, description: 'Ingresar ventas, compras o cobros.' },
+        { title: 'Balance del Día', href: '/admin/daily-balance', icon: Receipt, description: 'Ver resumen de ventas diarias.' },
         // Future sections can be added here
         // { title: 'Reportes', href: '/admin/reports', icon: LineChart, description: 'Ver reportes de ventas y stock.' },
     ];
@@ -39,18 +40,16 @@ const AdminDashboard: React.FC = () => {
                 <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {adminSections.map((section) => (
-                            <Link href={section.href} key={section.href} passHref legacyBehavior>
-                                <a className="block hover:no-underline">
-                                    <Card className="hover:shadow-lg hover:border-primary transition-all duration-200 h-full flex flex-col">
-                                        <CardHeader className="flex-row items-center space-x-4 pb-2">
-                                            <section.icon className="h-6 w-6 text-primary" />
-                                            <CardTitle className="text-lg">{section.title}</CardTitle>
-                                        </CardHeader>
-                                        <CardContent className="pt-2 flex-grow">
-                                            <p className="text-sm text-muted-foreground">{section.description}</p>
-                                        </CardContent>
-                                    </Card>
-                                </a>
+                            <Link href={section.href} key={section.href} passHref className="block hover:no-underline">
+                                <Card className="hover:shadow-lg hover:border-primary transition-all duration-200 h-full flex flex-col">
+                                    <CardHeader className="flex-row items-center space-x-4 pb-2">
+                                        <section.icon className="h-6 w-6 text-primary" />
+                                        <CardTitle className="text-lg">{section.title}</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="pt-2 flex-grow">
+                                        <p className="text-sm text-muted-foreground">{section.description}</p>
+                                    </CardContent>
+                                </Card>
                             </Link>
                         ))}
                     </div>
