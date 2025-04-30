@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -9,13 +10,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { formatCurrency } from '@/lib/utils';
 import Link from 'next/link';
-import { Eye } from 'lucide-react';
+import { Eye, ArrowLeft } from 'lucide-react'; // Added ArrowLeft
 import { Button } from '@/components/ui/button';
 
 interface UserAccount {
     id: string;
     name: string;
     balance: number;
+    role?: string; // Ensure role is included
 }
 
 const UserAccountsList: React.FC = () => {
@@ -64,44 +66,52 @@ const UserAccountsList: React.FC = () => {
     }
 
     return (
-        <Card className="shadow-md">
-            <CardHeader>
-                <CardTitle className="text-2xl">Estados de Cuenta</CardTitle>
-                <CardDescription>Selecciona un usuario para ver su estado de cuenta detallado.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                {accounts.length === 0 && !loadingData ? (
-                     <p className="text-center text-muted-foreground">No hay usuarios registrados.</p>
-                ) : (
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Nombre</TableHead>
-                                <TableHead className="text-right">Saldo</TableHead>
-                                <TableHead className="text-center">Ver Cuenta</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {accounts.map((account) => (
-                                <TableRow key={account.id}>
-                                    <TableCell className="font-medium">{account.name}</TableCell>
-                                    <TableCell className={`text-right font-semibold ${account.balance < 0 ? 'text-destructive' : 'text-primary'}`}>
-                                        {formatCurrency(account.balance)}
-                                    </TableCell>
-                                    <TableCell className="text-center">
-                                        <Link href={`/admin/user/${account.id}`} passHref>
-                                            <Button variant="ghost" size="icon" aria-label={`Ver ${account.name}`}>
-                                                <Eye className="h-4 w-4" />
-                                            </Button>
-                                        </Link>
-                                    </TableCell>
+        <div className="space-y-4"> {/* Added a container div */}
+             <Link href="/admin" passHref>
+                 <Button variant="outline">
+                    <ArrowLeft className="mr-2 h-4 w-4" /> Volver al Panel
+                 </Button>
+             </Link>
+
+            <Card className="shadow-md">
+                <CardHeader>
+                    <CardTitle className="text-2xl">Estados de Cuenta</CardTitle>
+                    <CardDescription>Selecciona un usuario para ver su estado de cuenta detallado.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {accounts.length === 0 && !loadingData ? (
+                        <p className="text-center text-muted-foreground">No hay usuarios registrados.</p>
+                    ) : (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Nombre</TableHead>
+                                    <TableHead className="text-right">Saldo</TableHead>
+                                    <TableHead className="text-center">Ver Cuenta</TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                )}
-            </CardContent>
-        </Card>
+                            </TableHeader>
+                            <TableBody>
+                                {accounts.map((account) => (
+                                    <TableRow key={account.id}>
+                                        <TableCell className="font-medium">{account.name}</TableCell>
+                                        <TableCell className={`text-right font-semibold ${account.balance < 0 ? 'text-destructive' : 'text-primary'}`}>
+                                            {formatCurrency(account.balance)}
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                            <Link href={`/admin/user/${account.id}`} passHref>
+                                                <Button variant="ghost" size="icon" aria-label={`Ver ${account.name}`}>
+                                                    <Eye className="h-4 w-4" />
+                                                </Button>
+                                            </Link>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
     );
 };
 
