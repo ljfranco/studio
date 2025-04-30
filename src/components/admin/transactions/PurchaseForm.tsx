@@ -166,7 +166,9 @@ const PurchaseForm: React.FC = () => {
                // Checks if video has metadata loaded and has dimensions > 0
                if (videoRef.current.readyState < videoRef.current.HAVE_METADATA || videoRef.current.videoWidth === 0) {
                   console.log("Video not ready for detection, waiting...");
-                  animationFrameId = requestAnimationFrame(detectBarcode); // Retry detection
+                   if (isDetectionRunning) { // Check flag before requesting next frame
+                        animationFrameId = requestAnimationFrame(detectBarcode); // Retry detection
+                   }
                   return;
                }
 
@@ -199,11 +201,13 @@ const PurchaseForm: React.FC = () => {
                  }
                  // Continue scanning even if detection fails once, if still running
                  if (isDetectionRunning) {
-                    animationFrameId = requestAnimationFrame(detectBarcode);
+                    animationFrameId = requestAnimationFrame(detectBarcode); // Try again
                  }
               }
           };
-          animationFrameId = requestAnimationFrame(detectBarcode); // Start the loop
+           if (isDetectionRunning) { // Start the loop only if needed
+               animationFrameId = requestAnimationFrame(detectBarcode);
+           }
 
            // Cleanup function
            return () => {
@@ -354,22 +358,18 @@ const PurchaseForm: React.FC = () => {
 
      // --- Handler for when a new product is added via the dialog ---
      const handleProductAdded = useCallback((newProduct: Product) => {
-         // Invalidate and refetch is one way, or directly update cache
-         // For simplicity, let's invalidate and let the main query refetch
-         queryClient.invalidateQueries({ queryKey: ['products'] }).then(() => {
-             // After invalidation, get the latest data and select the product
-             // Use getQueryData which might return undefined if data not ready yet
-             queryClient.getQueryData<Product[]>(['products'])?.then((updatedProducts) => {
-                 const addedProduct = updatedProducts?.find(p => p.id === newProduct.id);
-                 if (addedProduct) {
-                     setSelectedProduct(addedProduct);
-                     setSearchText(`${addedProduct.name} (${addedProduct.id})`); // Set search text
-                     setPurchasePrice(''); // Clear price field
-                 }
-             });
-         });
+         // Invalidate product query to refetch in the background
+         queryClient.invalidateQueries({ queryKey: ['products'] });
+
+         // Directly use the newly added product data to update the form state
+         if (newProduct) {
+            setSelectedProduct(newProduct);
+            setSearchText(`${newProduct.name} (${newProduct.id})`); // Set search text
+            setPurchasePrice(''); // Clear price field
+         }
+
          setBarcodeToAdd(null); // Clear the barcode to add state
-     }, [queryClient]);
+     }, [queryClient]); // Keep queryClient as dependency
 
 
     // --- Render Logic ---
