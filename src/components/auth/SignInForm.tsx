@@ -60,7 +60,7 @@ const SignInForm: React.FC = () => {
             description: 'Tu cuenta ha sido deshabilitada por un administrador.',
             variant: 'destructive',
          });
-         setIsLoading(false);
+         setIsLoading(false); // Set loading false explicitly
          return; // Stop further execution
       }
 
@@ -69,7 +69,7 @@ const SignInForm: React.FC = () => {
         title: '¡Éxito!',
         description: 'Has ingresado correctamente.',
       });
-      // No need to redirect here, AuthContext handles the state change
+       setIsLoading(false); // Set loading false on success
 
     } catch (error: any) {
       console.error("Sign in error:", error);
@@ -80,6 +80,8 @@ const SignInForm: React.FC = () => {
           errorMessage = 'El formato del correo electrónico no es válido.';
       } else if (error.code === 'auth/network-request-failed') {
          errorMessage = 'Error de red. Por favor, revisa tu conexión.';
+      } else if (error.code === 'auth/too-many-requests') {
+          errorMessage = 'Demasiados intentos fallidos. Intenta más tarde.';
       }
       // Add other specific error codes if needed
 
@@ -88,12 +90,9 @@ const SignInForm: React.FC = () => {
         description: errorMessage,
         variant: 'destructive',
       });
-    } finally {
-      // Only set loading to false if not already handled by the disabled check
-      if (auth.currentUser) { // Check if user is still logged in
-         setIsLoading(false);
-      }
+      setIsLoading(false); // Set loading false on error
     }
+    // Removed finally block to explicitly handle isLoading in each branch
   };
 
   return (
@@ -134,4 +133,3 @@ const SignInForm: React.FC = () => {
 };
 
 export default SignInForm;
-
