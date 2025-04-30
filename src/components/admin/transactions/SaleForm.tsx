@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'; // Added useMemo
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useFirebase } from '@/context/FirebaseContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -15,54 +15,46 @@ import { Combobox } from '@/components/ui/combobox'; // Assuming Combobox compon
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency, cn } from '@/lib/utils';
-import { PlusCircle, ScanLine, Trash2, Camera, Ban } from 'lucide-react';
+import { PlusCircle, ScanLine, Trash2, Camera, Ban, Pencil } from 'lucide-react'; // Added Pencil
 import type { User as AuthUser } from 'firebase/auth';
 import type { Product } from '@/types/product';
 import type { UserData } from '@/types/user'; // Define or import UserData type
 import type { Transaction, SaleDetail } from '@/types/transaction';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import UserDetailView from '../UserDetailView'; // Need recalculateBalance from here temporarily
-
+// Removed direct import of UserDetailView's recalculateBalance
 
 // Special ID for the generic customer - Changed from reserved name
 const CONSUMIDOR_FINAL_ID = 'consumidor-final-id'; // Changed ID
 const CONSUMIDOR_FINAL_NAME = 'Consumidor Final';
 
-
 // --- Fetching Functions ---
 const fetchUsers = async (db: any): Promise<UserData[]> => {
     const usersCol = collection(db, 'users');
-    // Filter out the generic customer if it exists as a document, and admins
     const q = query(usersCol, where('role', '!=', 'admin'), orderBy('name'));
     const snapshot = await getDocs(q);
     const users = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() } as UserData))
-        .filter(user => user.id !== CONSUMIDOR_FINAL_ID); // Ensure generic user doc isn't listed if it exists
+        .filter(user => user.id !== CONSUMIDOR_FINAL_ID);
 
-     // Add the generic customer option manually
      users.unshift({ id: CONSUMIDOR_FINAL_ID, name: CONSUMIDOR_FINAL_NAME, email: '', balance: 0, isEnabled: true, role: 'user' });
 
-     // Ensure the generic user document exists (run once or check on load)
-     const genericUserDocRef = doc(db, 'users', CONSUMIDOR_FINAL_ID); // Use new ID
+     const genericUserDocRef = doc(db, 'users', CONSUMIDOR_FINAL_ID);
      const genericDocSnap = await getDoc(genericUserDocRef);
      if (!genericDocSnap.exists()) {
         try {
             await setDoc(genericUserDocRef, {
                  name: CONSUMIDOR_FINAL_NAME,
-                 role: 'user', // Special role or just user? Let's use user for now.
+                 role: 'user',
                  balance: 0,
                  isEnabled: true,
                  createdAt: Timestamp.now(),
-                 isGeneric: true, // Add a flag to identify easily
+                 isGeneric: true,
             });
             console.log("Created generic consumer document.");
         } catch (error) {
              console.error("Failed to create generic consumer document:", error);
-             // Handle error appropriately, maybe prevent sale form loading
         }
      }
-
-
     return users;
 };
 
@@ -72,8 +64,16 @@ const fetchProducts = async (db: any): Promise<Product[]> => {
     return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Product));
 };
 
+// --- Component Props ---
+interface SaleFormProps {
+    saleToEdit?: Transaction | null; // Optional prop for editing an existing sale
+    onClose?: () => void; // Callback to close the dialog/modal if editing
+    onSuccessCallback?: () => void; // General success callback (e.g., for recalculation)
+}
+
+
 // --- Component ---
-const SaleForm: React.FC = () => {
+const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSuccessCallback }) => {
     const { db } = useFirebase();
     const { user: adminUser } = useAuth(); // Admin performing the sale
     const { toast } = useToast();
@@ -89,6 +89,24 @@ const SaleForm: React.FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [searchText, setSearchText] = useState(''); // For product search
 
+    const isEditMode = !!saleToEdit;
+
+    // --- Initialize form state for editing ---
+    useEffect(() => {
+        if (isEditMode && saleToEdit) {
+            console.log("Populating form for editing sale:", saleToEdit.id);
+            setSelectedUserId(saleToEdit.userId);
+            setSaleItems(saleToEdit.saleDetails || []); // Pre-fill items
+            // Do not reset product selection or quantity here, user might want to add more
+        } else {
+            // Reset for new sale mode
+             setSelectedUserId('');
+             setSaleItems([]);
+             setSelectedProduct(null);
+             setSearchText('');
+             setQuantity(1);
+        }
+    }, [isEditMode, saleToEdit]); // Depend on edit mode and the sale data
 
     // --- Data Fetching ---
     const { data: users = [], isLoading: isLoadingUsers, error: errorUsers } = useQuery<UserData[]>({
@@ -171,7 +189,7 @@ const SaleForm: React.FC = () => {
                       setSelectedProduct(product);
                        setSearchText(`${product.name} (${product.id})`); // Update search text
                       toast({ title: "Código Detectado", description: `${product.name}` });
-                      setIsScanning(false);
+                      setIsScanning(false); // Stop scanning after successful detection
                   } else {
                       toast({ title: "Código no encontrado", description: scannedId, variant: "destructive" });
                       // Keep scanning
@@ -205,31 +223,31 @@ const SaleForm: React.FC = () => {
             toast({ title: 'Error', description: 'Selecciona un producto y una cantidad válida.', variant: 'destructive' });
             return;
         }
-        if (quantity > (selectedProduct.quantity ?? 0)) { // Add nullish coalescing for quantity
-            toast({ title: 'Stock Insuficiente', description: `Solo quedan ${selectedProduct.quantity ?? 0} unidades de ${selectedProduct.name}.`, variant: 'destructive' });
+
+        const currentStock = selectedProduct.quantity ?? 0;
+        const existingItem = saleItems.find(item => item.productId === selectedProduct.id);
+        const currentQuantityInCart = existingItem?.quantity ?? 0;
+
+        if (currentQuantityInCart + quantity > currentStock) {
+             toast({
+                title: 'Stock Insuficiente',
+                description: `Stock total: ${currentStock}. En carrito: ${currentQuantityInCart}. Intentas agregar: ${quantity}.`,
+                variant: 'destructive',
+                duration: 5000 // Longer duration for stock errors
+            });
             return;
         }
 
-        // Check if item already exists
-        const existingItemIndex = saleItems.findIndex(item => item.productId === selectedProduct.id);
         const price = selectedProduct.sellingPrice ?? 0;
+        let updatedItems;
 
-        if (existingItemIndex > -1) {
-             // Update quantity and total if item exists
-             const updatedItems = [...saleItems];
-             const newQuantity = updatedItems[existingItemIndex].quantity + quantity;
-              if (newQuantity > (selectedProduct.quantity ?? 0)) { // Add nullish coalescing
-                  toast({ title: 'Stock Insuficiente', description: `No puedes agregar ${quantity} más. Stock total ${selectedProduct.quantity ?? 0}, ya en lista ${updatedItems[existingItemIndex].quantity}.`, variant: 'destructive' });
-                  return;
-              }
-             updatedItems[existingItemIndex] = {
-                 ...updatedItems[existingItemIndex],
-                 quantity: newQuantity,
-                 totalPrice: newQuantity * price,
-             };
-             setSaleItems(updatedItems);
+        if (existingItem) {
+            updatedItems = saleItems.map(item =>
+                item.productId === selectedProduct.id
+                    ? { ...item, quantity: item.quantity + quantity, totalPrice: (item.quantity + quantity) * price }
+                    : item
+            );
         } else {
-             // Add new item
             const newItem: SaleDetail = {
                 productId: selectedProduct.id,
                 productName: selectedProduct.name,
@@ -237,10 +255,10 @@ const SaleForm: React.FC = () => {
                 unitPrice: price,
                 totalPrice: quantity * price,
             };
-            setSaleItems([...saleItems, newItem]);
+            updatedItems = [...saleItems, newItem];
         }
 
-
+        setSaleItems(updatedItems);
         // Reset inputs
         setSelectedProduct(null);
         setSearchText(''); // Clear search text
@@ -255,40 +273,8 @@ const SaleForm: React.FC = () => {
         return saleItems.reduce((total, item) => total + item.totalPrice, 0);
     }, [saleItems]);
 
-    // --- Recalculate Balance (Temporary import/use) ---
-    // TODO: Move recalculateBalance to a shared service/hook
-     const recalculateBalance = useCallback(async (userId: string, showToast: boolean = true) => {
-         if (!userId || !db || !adminUser) return;
-         console.log(`Recalculating balance for user: ${userId}`);
-         try {
-             const transactionsColRef = collection(db, 'transactions');
-             const q = query(transactionsColRef, where('userId', '==', userId), orderBy('timestamp', 'asc'));
-             const querySnapshot = await getDocs(q);
-             let currentBalance = 0;
-             const batch = writeBatch(db);
-             querySnapshot.forEach((docSnap) => {
-                 const transaction = { id: docSnap.id, ...docSnap.data() } as Transaction;
-                 let transactionAmount = 0;
-                 if (!transaction.isCancelled) {
-                     transactionAmount = transaction.type === 'purchase' ? -transaction.amount : transaction.amount;
-                 }
-                 currentBalance += transactionAmount;
-                 if (transaction.balanceAfter !== currentBalance) {
-                    batch.update(docSnap.ref, { balanceAfter: currentBalance });
-                 }
-             });
-             const userDocRef = doc(db, 'users', userId);
-             batch.update(userDocRef, { balance: currentBalance });
-             await batch.commit();
-             if (showToast) toast({ title: "Éxito", description: "Saldo recalculado." });
-             console.log("Recalculation complete.");
-         } catch (error) {
-             console.error("Error recalculating balance:", error);
-             if (showToast) toast({ title: "Error", description: `No se pudo recalcular el saldo. ${error instanceof Error ? error.message : String(error)}`, variant: "destructive" });
-         }
-     }, [db, adminUser, toast]);
 
-    // --- Submit Sale ---
+    // --- Submit Sale (Handles both Add and Edit) ---
     const handleSubmitSale = async () => {
         if (!selectedUserId) {
             toast({ title: 'Error', description: 'Selecciona un cliente.', variant: 'destructive' });
@@ -307,84 +293,144 @@ const SaleForm: React.FC = () => {
 
         try {
             await runTransaction(db, async (transaction) => {
-                const saleTransactionRef = doc(collection(db, 'transactions')); // New transaction for the sale
                 const timestamp = Timestamp.now();
+                const originalSaleId = isEditMode ? saleToEdit?.id : null;
 
-                // 1. Read all product documents first
-                const productRefs = saleItems.map(item => doc(db, 'products', item.productId));
+                // --- Step 1: Handle Original Sale (if editing) ---
+                let originalSaleDetails: SaleDetail[] = [];
+                if (isEditMode && originalSaleId) {
+                    const originalSaleRef = doc(db, 'transactions', originalSaleId);
+                    const originalSaleSnap = await transaction.get(originalSaleRef);
+                    if (!originalSaleSnap.exists()) {
+                        throw new Error("La venta original a modificar no existe.");
+                    }
+                    const originalSaleData = originalSaleSnap.data() as Transaction;
+                    originalSaleDetails = originalSaleData.saleDetails || [];
+
+                    // Mark original sale as cancelled/modified
+                    transaction.update(originalSaleRef, {
+                        isCancelled: true, // Mark as cancelled
+                        cancelledAt: timestamp,
+                        cancelledBy: adminUser.uid,
+                        cancelledByName: adminUser.displayName || adminUser.email,
+                        cancellationReason: `Modificada por nueva venta ${timestamp.toMillis()}`, // Indicate modification
+                        // Optionally add modification fields if needed for audit
+                        // isModified: true,
+                        // modifiedAt: timestamp,
+                        // modifiedBy: adminUser.uid,
+                    });
+                }
+
+                // --- Step 2: Read Product Stock (Combined Needs) ---
+                // Get unique product IDs from both original sale (for restoring) and new sale (for deducting)
+                const allProductIds = new Set([
+                    ...originalSaleDetails.map(item => item.productId),
+                    ...saleItems.map(item => item.productId)
+                ]);
+                const productRefs = Array.from(allProductIds).map(id => doc(db, 'products', id));
                 const productDocs = await Promise.all(productRefs.map(ref => transaction.get(ref)));
 
-                const productDataMap = new Map<string, Product>();
+                const productDataMap = new Map<string, { exists: boolean, data: Product | null }>();
                 productDocs.forEach((docSnap, index) => {
-                    if (!docSnap.exists()) {
-                        throw new Error(`Producto ${saleItems[index].productName} (${saleItems[index].productId}) no encontrado.`);
-                    }
-                    productDataMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as Product);
+                    const productId = Array.from(allProductIds)[index];
+                    productDataMap.set(productId, {
+                        exists: docSnap.exists(),
+                        data: docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as Product : null
+                    });
                 });
 
-                // 2. Validate stock based on read data
+                // --- Step 3: Calculate Final Stock Adjustments ---
+                const stockAdjustments = new Map<string, number>(); // productId -> quantity change (+ve for restore, -ve for deduct)
+
+                // Restore stock from original sale (if editing)
+                originalSaleDetails.forEach(item => {
+                    stockAdjustments.set(item.productId, (stockAdjustments.get(item.productId) || 0) + item.quantity);
+                });
+
+                // Deduct stock for the new/updated sale
                 for (const item of saleItems) {
-                    const productData = productDataMap.get(item.productId);
-                    const currentQuantity = productData?.quantity ?? 0;
-                    if (item.quantity > currentQuantity) {
-                        throw new Error(`Stock insuficiente para ${item.productName}. Disponible: ${currentQuantity}, Venta: ${item.quantity}`);
+                    const currentAdjustment = stockAdjustments.get(item.productId) || 0;
+                    stockAdjustments.set(item.productId, currentAdjustment - item.quantity);
+
+                    // Validate stock *after* calculating net change
+                    const productInfo = productDataMap.get(item.productId);
+                    if (!productInfo || !productInfo.exists) {
+                        throw new Error(`Producto ${item.productName} (${item.productId}) no encontrado.`);
+                    }
+                    const currentQuantity = productInfo.data?.quantity ?? 0;
+                    const netChange = stockAdjustments.get(item.productId)!; // Should exist at this point
+
+                    if (currentQuantity + netChange < 0) {
+                         throw new Error(`Stock insuficiente para ${item.productName}. Disponible: ${currentQuantity}, Cambio Neto Requerido: ${netChange}`);
                     }
                 }
 
-                // 3. Perform all writes
-                // Create the main sale transaction document
-                transaction.set(saleTransactionRef, {
+                // --- Step 4: Create the New Sale Transaction ---
+                const newSaleTransactionRef = doc(collection(db, 'transactions'));
+                transaction.set(newSaleTransactionRef, {
                     userId: selectedUserId,
-                    type: 'purchase', // A sale is a 'purchase' for the customer's account
-                    description: `Venta #${saleTransactionRef.id.substring(0, 6)}`, // Auto-generated description
-                    amount: saleTotal, // Total amount of the sale
-                    balanceAfter: 0, // Placeholder, recalculate will fix this
+                    type: 'purchase', // Sale is a purchase for customer
+                    description: `Venta #${newSaleTransactionRef.id.substring(0, 6)}${isEditMode ? ' (Modificada)' : ''}`,
+                    amount: saleTotal,
+                    balanceAfter: 0, // Placeholder
                     timestamp: timestamp,
                     addedBy: adminUser.uid,
                     addedByName: adminUser.displayName || adminUser.email,
                     isAdminAction: true,
                     isCancelled: false,
-                    isModified: false,
-                    saleDetails: saleItems, // Embed sale details
+                    isModified: isEditMode, // Mark as modified if editing
+                    modifiedAt: isEditMode ? timestamp : null, // Timestamp modification
+                    saleDetails: saleItems,
+                    // If editing, link to original? Maybe not necessary if cancelling old one
+                    // originalSaleId: originalSaleId,
                 });
 
-                // Update product quantities (decrement stock)
-                for (const item of saleItems) {
-                    const productRef = doc(db, 'products', item.productId);
-                    const productData = productDataMap.get(item.productId);
-                    const currentQuantity = productData?.quantity ?? 0;
-                    const newQuantity = currentQuantity - item.quantity;
-                    // No need to check stock again here as it was validated before writes
-                    transaction.update(productRef, { quantity: newQuantity });
+                // --- Step 5: Apply Stock Updates ---
+                for (const [productId, quantityChange] of stockAdjustments.entries()) {
+                    if (quantityChange !== 0) {
+                        const productRef = doc(db, 'products', productId);
+                        const productInfo = productDataMap.get(productId);
+                        const currentQuantity = productInfo?.data?.quantity ?? 0;
+                        const newQuantity = currentQuantity + quantityChange;
+                        console.log(`Product ${productId}: Current ${currentQuantity}, Change ${quantityChange}, New ${newQuantity}`);
+                        transaction.update(productRef, { quantity: newQuantity });
+                    }
                 }
 
                 // User balance update is handled by recalculateBalance called after transaction
             });
 
-            // Recalculate balance for the affected user *after* the transaction commits
-            await recalculateBalance(selectedUserId, false); // Recalculate silently
+            // Call success callback (e.g., for recalculation) *after* the transaction commits
+            onSuccessCallback?.(); // Trigger recalculation
 
             toast({
-                title: '¡Venta Registrada!',
+                title: `¡Venta ${isEditMode ? 'Modificada' : 'Registrada'}!`,
                 description: `Venta por ${formatCurrency(saleTotal)} registrada para ${users.find(u => u.id === selectedUserId)?.name}.`,
             });
 
-            // Reset form state
-            setSelectedUserId('');
-            setSaleItems([]);
-            setSelectedProduct(null);
-            setSearchText('');
-            setQuantity(1);
-            queryClient.invalidateQueries({ queryKey: ['products'] }); // Invalidate products to update stock display
-            queryClient.invalidateQueries({ queryKey: ['transactions', selectedUserId] }); // Invalidate transactions for the user
-            queryClient.invalidateQueries({ queryKey: ['userBalance', selectedUserId] }); // Invalidate user balance if cached separately
-            queryClient.invalidateQueries({ queryKey: ['saleUsers'] }); // Invalidate users potentially?
+            // Reset form state only if NOT editing, or if explicitly closed
+            if (!isEditMode) {
+                setSelectedUserId('');
+                setSaleItems([]);
+                setSelectedProduct(null);
+                setSearchText('');
+                setQuantity(1);
+            }
+
+            queryClient.invalidateQueries({ queryKey: ['products'] });
+            queryClient.invalidateQueries({ queryKey: ['transactions', selectedUserId] });
+            queryClient.invalidateQueries({ queryKey: ['userBalance', selectedUserId] });
+            queryClient.invalidateQueries({ queryKey: ['saleUsers'] });
+
+            if (isEditMode && onClose) {
+                 onClose(); // Close the modal/dialog after successful edit
+            }
 
         } catch (error) {
             console.error("Error submitting sale:", error);
             toast({
-                title: 'Error al Registrar Venta',
-                description: `No se pudo completar la venta. ${error instanceof Error ? error.message : String(error)}`,
+                title: `Error al ${isEditMode ? 'Modificar' : 'Registrar'} Venta`,
+                description: `No se pudo completar la operación. ${error instanceof Error ? error.message : String(error)}`,
                 variant: 'destructive',
             });
         } finally {
@@ -402,19 +448,24 @@ const SaleForm: React.FC = () => {
              {/* Customer Selection */}
              <div>
                 <Label htmlFor="customer-select">Cliente</Label>
-                <Select value={selectedUserId} onValueChange={setSelectedUserId} disabled={isSubmitting || saleItems.length > 0}>
+                <Select
+                    value={selectedUserId}
+                    onValueChange={setSelectedUserId}
+                    disabled={isSubmitting || isEditMode || saleItems.length > 0} // Disable if editing or items added
+                >
                     <SelectTrigger id="customer-select">
                         <SelectValue placeholder="Selecciona un cliente..." />
                     </SelectTrigger>
                     <SelectContent>
                         {users.map((user) => (
-                            <SelectItem key={user.id} value={user.id}>
-                                {user.name} {user.id !== CONSUMIDOR_FINAL_ID && user.email ? `(${user.email})` : ''}
+                            <SelectItem key={user.id} value={user.id} disabled={!user.isEnabled && user.id !== CONSUMIDOR_FINAL_ID}>
+                                {user.name} {!user.isEnabled && user.id !== CONSUMIDOR_FINAL_ID ? '(Deshabilitado)' : ''}
                             </SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
-                {saleItems.length > 0 && <p className="text-xs text-muted-foreground mt-1">Cliente bloqueado hasta finalizar o cancelar la venta actual.</p>}
+                {isEditMode && <p className="text-xs text-muted-foreground mt-1">Cliente no editable al modificar una venta.</p>}
+                {!isEditMode && saleItems.length > 0 && <p className="text-xs text-muted-foreground mt-1">Cliente bloqueado hasta finalizar o cancelar la venta actual.</p>}
              </div>
 
              {/* Add Product Section */}
@@ -547,22 +598,38 @@ const SaleForm: React.FC = () => {
                 <div className="flex flex-col items-end space-y-4 mt-4">
                     <p className="text-xl font-bold">Total Venta: {formatCurrency(saleTotal)}</p>
                     <div className='flex gap-2'>
-                         <Button
-                            variant="outline"
-                            onClick={() => {
-                                setSaleItems([]); // Clear sale items
-                                setSelectedUserId(''); // Reset customer selection
-                            }}
-                            disabled={isSubmitting}
-                         >
-                             Cancelar Venta Actual
-                         </Button>
+                        {/* Only show Cancel Sale button in "new sale" mode */}
+                         {!isEditMode && (
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setSaleItems([]); // Clear sale items
+                                    setSelectedUserId(''); // Reset customer selection
+                                }}
+                                disabled={isSubmitting}
+                            >
+                                Cancelar Venta Actual
+                            </Button>
+                         )}
+                          {/* Close button for edit mode */}
+                          {isEditMode && onClose && (
+                            <Button
+                                variant="outline"
+                                onClick={onClose}
+                                disabled={isSubmitting}
+                            >
+                                Cancelar Modificación
+                            </Button>
+                          )}
                         <Button
                             onClick={handleSubmitSale}
                             disabled={isSubmitting || saleItems.length === 0 || !selectedUserId}
                             size="lg"
                         >
-                            {isSubmitting ? <LoadingSpinner className="mr-2" /> : 'Confirmar Venta'}
+                            {isSubmitting
+                                ? <LoadingSpinner className="mr-2" />
+                                : (isEditMode ? <><Pencil className="mr-2 h-4 w-4" /> Guardar Cambios</> : 'Confirmar Venta')
+                            }
                         </Button>
                     </div>
                 </div>
@@ -572,4 +639,3 @@ const SaleForm: React.FC = () => {
 };
 
 export default SaleForm;
-

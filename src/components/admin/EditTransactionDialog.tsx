@@ -17,12 +17,13 @@ import {
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Import Alert
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
 import {
   Form,
   FormControl,
@@ -64,6 +65,7 @@ const EditTransactionDialog: React.FC<EditTransactionDialogProps> = ({
   const { db } = useFirebase();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const isSale = !!transaction?.saleDetails && transaction.saleDetails.length > 0;
 
   const form = useForm<EditTransactionFormValues>({
     resolver: zodResolver(editTransactionSchema),
@@ -88,6 +90,12 @@ const EditTransactionDialog: React.FC<EditTransactionDialogProps> = ({
   }, [isOpen, transaction, form]);
 
   const onSubmit = async (values: EditTransactionFormValues) => {
+    if (isSale) {
+        toast({ title: 'Acción no permitida', description: 'Las ventas no se pueden editar directamente. Cancela y crea una nueva.', variant: 'destructive' });
+        onClose();
+        return;
+    }
+
     if (!adminUser) {
         toast({ title: 'Error', description: 'Usuario administrador no válido.', variant: 'destructive' });
         return;
@@ -176,99 +184,120 @@ const EditTransactionDialog: React.FC<EditTransactionDialogProps> = ({
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Editar Movimiento</DialogTitle>
-          <DialogDescription>Modifica los detalles de la transacción seleccionada.</DialogDescription>
+          <DialogDescription>
+            {isSale
+              ? "Las ventas no se pueden editar directamente."
+              : "Modifica los detalles de la transacción seleccionada."}
+          </DialogDescription>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
-            <FormField
-                control={form.control}
-                name="type"
-                render={({ field }) => (
-                <FormItem className="space-y-3">
-                    <FormLabel>Tipo de Movimiento</FormLabel>
-                    <FormControl>
-                    <RadioGroup
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                        className="flex space-x-4"
-                    >
-                        <FormItem className="flex items-center space-x-2 space-y-0">
-                        <FormControl>
-                            <RadioGroupItem value="purchase" />
-                        </FormControl>
-                        <FormLabel className="font-normal">Compra</FormLabel>
+
+        {isSale ? (
+            <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Edición No Permitida</AlertTitle>
+                <AlertDescription>
+                    Para modificar una venta, debes cancelarla y crear una nueva con los cambios deseados. Esto asegura la consistencia del stock.
+                </AlertDescription>
+                <DialogFooter className="mt-4">
+                    <DialogClose asChild>
+                        <Button type="button" variant="outline">Cerrar</Button>
+                    </DialogClose>
+                 </DialogFooter>
+            </Alert>
+
+        ) : (
+            <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
+                    <FormField
+                        control={form.control}
+                        name="type"
+                        render={({ field }) => (
+                        <FormItem className="space-y-3">
+                            <FormLabel>Tipo de Movimiento</FormLabel>
+                            <FormControl>
+                            <RadioGroup
+                                onValueChange={field.onChange}
+                                defaultValue={field.value}
+                                className="flex space-x-4"
+                            >
+                                <FormItem className="flex items-center space-x-2 space-y-0">
+                                <FormControl>
+                                    <RadioGroupItem value="purchase" />
+                                </FormControl>
+                                <FormLabel className="font-normal">Compra</FormLabel>
+                                </FormItem>
+                                <FormItem className="flex items-center space-x-2 space-y-0">
+                                <FormControl>
+                                    <RadioGroupItem value="payment" />
+                                </FormControl>
+                                <FormLabel className="font-normal">Pago</FormLabel>
+                                </FormItem>
+                            </RadioGroup>
+                            </FormControl>
+                            <FormMessage />
                         </FormItem>
-                        <FormItem className="flex items-center space-x-2 space-y-0">
+                        )}
+                    />
+                    <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Descripción (Opcional)</FormLabel>
                         <FormControl>
-                            <RadioGroupItem value="payment" />
+                            <Textarea
+                            placeholder={form.getValues('type') === 'purchase' ? 'Ej: Pan, Leche... (Predeterminado: Compra)' : 'Ej: Pago quincena... (Predeterminado: Pago)'}
+                            {...field}
+                            rows={2}
+                            />
                         </FormControl>
-                        <FormLabel className="font-normal">Pago</FormLabel>
+                        <FormMessage />
                         </FormItem>
-                    </RadioGroup>
-                    </FormControl>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Descripción (Opcional)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                       placeholder={form.getValues('type') === 'purchase' ? 'Ej: Pan, Leche... (Predeterminado: Compra)' : 'Ej: Pago quincena... (Predeterminado: Pago)'}
-                       {...field}
-                       rows={2}
+                    )}
                     />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="amount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Monto</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="0.00" {...field} step="0.01" value={field.value ?? ''}/>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-             <FormField
-              control={form.control}
-              name="modificationReason"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Razón de Modificación (Opcional)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                       placeholder="Ej: Corrección de monto..."
-                       {...field}
-                       rows={2}
+                    <FormField
+                    control={form.control}
+                    name="amount"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Monto</FormLabel>
+                        <FormControl>
+                            <Input type="number" placeholder="0.00" {...field} step="0.01" value={field.value ?? ''}/>
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
                     />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline" disabled={isLoading}>
-                  Cancelar
-                </Button>
-              </DialogClose>
-              <Button type="submit" disabled={isLoading} className="bg-primary hover:bg-primary/90">
-                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Guardar Cambios'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+                    <FormField
+                    control={form.control}
+                    name="modificationReason"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Razón de Modificación (Opcional)</FormLabel>
+                        <FormControl>
+                            <Textarea
+                            placeholder="Ej: Corrección de monto..."
+                            {...field}
+                            rows={2}
+                            />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
+                    <DialogFooter>
+                    <DialogClose asChild>
+                        <Button type="button" variant="outline" disabled={isLoading}>
+                        Cancelar
+                        </Button>
+                    </DialogClose>
+                    <Button type="submit" disabled={isLoading} className="bg-primary hover:bg-primary/90">
+                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Guardar Cambios'}
+                    </Button>
+                    </DialogFooter>
+                </form>
+            </Form>
+        )}
       </DialogContent>
     </Dialog>
   );

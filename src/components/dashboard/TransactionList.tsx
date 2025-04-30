@@ -16,6 +16,12 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"; // Import Popover
 import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip"; // Import Tooltip
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -73,6 +79,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
 
   return (
       <>
+       <TooltipProvider> {/* Required for Tooltip */}
         <div className="overflow-x-auto">
             <Table>
             <TableHeader>
@@ -176,18 +183,29 @@ const TransactionList: React.FC<TransactionListProps> = ({
                         <TableCell className="text-center w-auto px-1 space-x-0 sm:space-x-1"> {/* Adjust padding and spacing */}
                         {!transaction.isCancelled ? (
                             <>
-                            {/* Prevent editing sales directly, maybe only cancellation */}
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => onEdit?.(transaction)}
-                                aria-label={`Editar ${transaction.description}`}
-                                className="h-7 w-7"
-                                disabled={!onEdit || hasSaleDetails} // Disable edit for sales for now
-                                title={hasSaleDetails ? "No se puede editar una venta (cancelar para revertir)" : `Editar ${transaction.description}`}
-                            >
-                                <Pencil className={cn("h-4 w-4", hasSaleDetails && "text-muted-foreground")}/>
-                            </Button>
+                             {/* Edit Button with Tooltip for Sales */}
+                             <Tooltip>
+                                <TooltipTrigger asChild>
+                                    {/* Wrap disabled button in a span for Tooltip to work */}
+                                    <span tabIndex={hasSaleDetails ? 0 : -1}>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => onEdit?.(transaction)}
+                                            aria-label={`Editar ${transaction.description}`}
+                                            className="h-7 w-7"
+                                            disabled={!onEdit || hasSaleDetails}
+                                        >
+                                            <Pencil className={cn("h-4 w-4", hasSaleDetails && "text-muted-foreground")}/>
+                                        </Button>
+                                    </span>
+                                </TooltipTrigger>
+                                {hasSaleDetails && (
+                                    <TooltipContent side="top">
+                                        <p className="text-xs">No se pueden editar ventas directamente. Cancela y crea una nueva.</p>
+                                    </TooltipContent>
+                                )}
+                             </Tooltip>
                             <Button
                                 variant="ghost"
                                 size="icon"
@@ -200,16 +218,23 @@ const TransactionList: React.FC<TransactionListProps> = ({
                             </Button>
                             </>
                         ) : (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => onRestore?.(transaction)}
-                                aria-label={`Restaurar ${transaction.description}`}
-                                className="h-7 w-7 text-green-600 hover:text-green-700"
-                                disabled={!onRestore}
-                            >
-                                <RotateCcw className="h-4 w-4" /> {/* Restore Icon */}
-                            </Button>
+                             <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => onRestore?.(transaction)}
+                                        aria-label={`Restaurar ${transaction.description}`}
+                                        className="h-7 w-7 text-green-600 hover:text-green-700"
+                                        disabled={!onRestore}
+                                    >
+                                        <RotateCcw className="h-4 w-4" /> {/* Restore Icon */}
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                    <p className="text-xs">Restaurar transacción cancelada</p>
+                                </TooltipContent>
+                            </Tooltip>
                         )}
                         </TableCell>
                     )}
@@ -219,6 +244,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
             </TableBody>
             </Table>
         </div>
+       </TooltipProvider>
 
          {/* Sale Detail Dialog */}
          <Dialog open={saleDetailOpen} onOpenChange={setSaleDetailOpen}>
