@@ -4,18 +4,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useFirebase } from '@/context/FirebaseContext';
-import { collection, query, where, orderBy, onSnapshot, Timestamp, startOfDay, endOfDay, getDocs, doc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, Timestamp, getDocs, doc, writeBatch } from 'firebase/firestore';
+import { format, startOfDay, endOfDay } from 'date-fns'; // Import startOfDay and endOfDay from date-fns
+import { es } from 'date-fns/locale';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { formatCurrency, cn } from '@/lib/utils';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { Pencil, Trash2, ShoppingBag, Info, RotateCcw, RefreshCw } from 'lucide-react';
 import SaleForm from './SaleForm'; // For editing
 import CancelTransactionDialog from '../CancelTransactionDialog'; // For cancelling
 import RestoreTransactionDialog from '../RestoreTransactionDialog'; // For restoring
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog'; // Added DialogClose
 import { useToast } from '@/hooks/use-toast';
 import type { Transaction, SaleDetail } from '@/types/transaction';
 import type { UserData } from '@/types/user'; // Import UserData type
