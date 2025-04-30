@@ -55,12 +55,14 @@ interface AddEditProductDialogProps {
   isOpen: boolean;
   onClose: () => void;
   product?: Product | null; // Product data for editing, null/undefined for adding
+  onSuccessCallback?: (addedProduct: Product) => void; // Callback on successful add/edit
 }
 
 const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
   isOpen,
   onClose,
   product,
+  onSuccessCallback,
 }) => {
   const { db } = useFirebase();
   const { toast } = useToast();
@@ -72,7 +74,8 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null); // For potentially drawing scan lines/results
 
 
-  const isEditMode = !!product;
+  const isEditMode = !!product && !!product.name; // Edit mode if product exists and has a name (distinguish from prefilling barcode)
+  const prefilledBarcode = product?.id && !product.name; // Check if only barcode is prefilled
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
@@ -190,7 +193,16 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
           quantity: product.quantity ?? 0,
           sellingPrice: product.sellingPrice ?? '' as any,
         });
-      } else {
+      } else if (prefilledBarcode && product) {
+           console.log("Prefilling barcode:", product.id);
+          form.reset({
+              id: product.id, // Prefill ID
+              name: '',
+              quantity: 0,
+              sellingPrice: '' as any,
+          });
+      }
+      else {
          console.log("Resetting form for add");
         form.reset({
           id: '',
@@ -202,7 +214,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
        setIsScanning(false); // Ensure scanner is off initially
        setHasCameraPermission(null); // Reset permission status
     }
-  }, [isOpen, product, isEditMode, form]);
+  }, [isOpen, product, isEditMode, prefilledBarcode, form]);
 
 
   const handleClose = () => {
@@ -211,18 +223,26 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
   };
 
   // --- Firestore Mutation ---
-  const mutationFn = async (values: ProductFormValues) => {
+  const mutationFn = async (values: ProductFormValues): Promise<Product> => { // Return added/updated product
     const productRef = doc(db, 'products', values.id); // Use barcode as document ID
-    const data: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'purchasePrices'> & { createdAt?: any, updatedAt?: any } = {
-      name: values.name,
-      quantity: values.quantity ?? 0,
-      sellingPrice: values.sellingPrice,
-      updatedAt: serverTimestamp(),
+    const finalData: Product = { // Construct final product data
+        id: values.id,
+        name: values.name,
+        quantity: values.quantity ?? 0,
+        sellingPrice: values.sellingPrice,
+        updatedAt: Timestamp.now(), // Set for both add and edit
     };
 
     if (isEditMode) {
       // Update existing document
-      await updateDoc(productRef, data);
+       const updatePayload: Partial<Product> = {
+          name: values.name,
+          quantity: values.quantity ?? 0,
+          sellingPrice: values.sellingPrice,
+          updatedAt: serverTimestamp(),
+       };
+      await updateDoc(productRef, updatePayload);
+      finalData.createdAt = product?.createdAt; // Preserve original createdAt if editing
     } else {
         // Check if product already exists before adding
         const docSnap = await getDoc(productRef);
@@ -230,19 +250,21 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
              throw new Error(`El producto con código de barras ${values.id} ya existe.`);
         }
       // Add new document with createdAt timestamp
-      data.createdAt = serverTimestamp();
-      await setDoc(productRef, data, { merge: true }); // merge:true in case purchasePrices exist from price list edits
+      finalData.createdAt = Timestamp.now();
+      await setDoc(productRef, finalData); // Use finalData which includes ID
     }
+     return finalData; // Return the full product data
   };
 
   const mutation = useMutation({
     mutationFn,
-    onSuccess: () => {
+    onSuccess: (data) => { // Data is the returned product
       toast({
         title: '¡Éxito!',
         description: `Producto ${isEditMode ? 'actualizado' : 'agregado'} correctamente.`,
       });
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      onSuccessCallback?.(data); // Call the callback with the added/updated product data
       handleClose(); // Use the new handler
     },
     onError: (error) => {
@@ -284,6 +306,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
           <DialogTitle>{isEditMode ? 'Editar Producto' : 'Agregar Nuevo Producto'}</DialogTitle>
           <DialogDescription>
             {isEditMode ? 'Modifica los detalles del producto.' : 'Ingresa los detalles del nuevo producto. Puedes escanear el código de barras.'}
+             {prefilledBarcode && <span className='block mt-1 text-sm text-primary'>Código de barras pre-llenado. Completa los demás datos.</span>}
           </DialogDescription>
         </DialogHeader>
 
@@ -336,11 +359,12 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
                             <Input
                                 placeholder="Escanea o ingresa el código"
                                 {...field}
-                                disabled={isSaving || isEditMode} // Disable editing barcode in edit mode
+                                disabled={isSaving || isEditMode || isScanning} // Disable editing barcode in edit mode or while scanning
                                 className="font-mono text-sm"
                             />
                         </FormControl>
-                         {!isEditMode && ( // Only show scan button when adding
+                         {/* Show scan button only when adding and not already scanning */}
+                          {!isEditMode && (
                               <Button
                                 type="button"
                                 variant="outline"
