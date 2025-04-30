@@ -444,7 +444,8 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
     if (isLoading) return <div className="flex justify-center p-4"><LoadingSpinner /></div>;
 
     return (
-        <div className="space-y-6">
+        // Wrap the form content in a div that can scroll if needed
+        <div className="space-y-6 overflow-y-auto">
              {/* Customer Selection */}
              <div>
                 <Label htmlFor="customer-select">Cliente</Label>
@@ -557,7 +558,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
 
              {/* Sale Items List */}
              {saleItems.length > 0 && (
-                <div className="border rounded-md">
+                <div className="border rounded-md overflow-x-auto"> {/* Make table scrollable horizontally if needed */}
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -593,9 +594,9 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                 </div>
              )}
 
-             {/* Total and Submit */}
+             {/* Total and Submit - Keep this outside the scrollable area for visibility */}
              {saleItems.length > 0 && (
-                <div className="flex flex-col items-end space-y-4 mt-4">
+                <div className="flex flex-col items-end space-y-4 mt-4 sticky bottom-0 bg-background py-4 px-6 border-t"> {/* Make footer sticky */}
                     <p className="text-xl font-bold">Total Venta: {formatCurrency(saleTotal)}</p>
                     <div className='flex gap-2'>
                         {/* Only show Cancel Sale button in "new sale" mode */}
@@ -639,3 +640,4 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
 };
 
 export default SaleForm;
+
