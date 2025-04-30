@@ -20,7 +20,7 @@ import type { Product } from '@/types/product';
 // Removed Distributor import
 import type { Transaction } from '@/types/transaction';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import AddEditProductDialog from '../inventory/AddEditProductDialog';
+import AddEditProductDialog from '../inventory/AddEditProductDialog'; // Import AddEditProductDialog
 
 // Define the structure for items in the purchase list
 interface PurchaseItem {
@@ -57,8 +57,8 @@ const PurchaseForm: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [searchText, setSearchText] = useState('');
-    const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
-    const [barcodeToAdd, setBarcodeToAdd] = useState<string | null>(null);
+    const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false); // State for Add Product Dialog
+    const [barcodeToAdd, setBarcodeToAdd] = useState<string | null>(null); // State to store barcode for new product
 
 
     // --- Data Fetching ---
@@ -145,8 +145,8 @@ const PurchaseForm: React.FC = () => {
                       toast({ title: "Código Detectado", description: `${product.name}` });
                   } else {
                        // Product not found, prompt to add
-                       setBarcodeToAdd(scannedId);
-                       setIsAddProductDialogOpen(true);
+                       setBarcodeToAdd(scannedId); // Store the scanned barcode
+                       setIsAddProductDialogOpen(true); // Open the dialog
                        toast({ title: "Producto no encontrado", description: `Código: ${scannedId}. Agrega el nuevo producto.`, variant: "default", duration: 5000 });
                   }
                 } else {
@@ -159,7 +159,7 @@ const PurchaseForm: React.FC = () => {
           };
           animationFrameId = requestAnimationFrame(detectBarcode);
           return () => cancelAnimationFrame(animationFrameId);
-       }, [isScanning, hasCameraPermission, products, toast, isBarcodeDetectorSupported]); // Removed selectedDistributorId dependency
+       }, [isScanning, hasCameraPermission, products, toast, isBarcodeDetectorSupported]);
 
        const toggleScan = () => {
          if (!isBarcodeDetectorSupported) {
@@ -167,7 +167,7 @@ const PurchaseForm: React.FC = () => {
              return;
          }
          setIsScanning(prev => !prev);
-         if (isScanning) {
+         if (isScanning) { // If turning scanner OFF
              setSelectedProduct(null);
              setSearchText('');
              setPurchasePrice('');
@@ -253,7 +253,7 @@ const PurchaseForm: React.FC = () => {
 
                 if (!productSnap.exists()) {
                      console.warn(`Product ${item.productId} not found during purchase submission. Skipping update.`);
-                     continue;
+                     continue; // Skip this item if product doc doesn't exist
                 }
 
                 const currentQuantity = productSnap.data()?.quantity ?? 0;
@@ -300,18 +300,22 @@ const PurchaseForm: React.FC = () => {
 
      // --- Handler for when a new product is added via the dialog ---
      const handleProductAdded = useCallback((newProduct: Product) => {
+         // Invalidate and refetch is one way, or directly update cache
+         // For simplicity, let's invalidate and let the main query refetch
          queryClient.invalidateQueries({ queryKey: ['products'] }).then(() => {
+             // After invalidation, get the latest data and select the product
+             // Use getQueryData which might return undefined if data not ready yet
              queryClient.getQueryData<Product[]>(['products'])?.then((updatedProducts) => {
                  const addedProduct = updatedProducts?.find(p => p.id === newProduct.id);
                  if (addedProduct) {
                      setSelectedProduct(addedProduct);
-                     setSearchText(`${addedProduct.name} (${addedProduct.id})`);
+                     setSearchText(`${addedProduct.name} (${addedProduct.id})`); // Set search text
                      setPurchasePrice(''); // Clear price field
                  }
              });
          });
-         setBarcodeToAdd(null);
-     }, [queryClient]); // Removed selectedDistributorId dependency
+         setBarcodeToAdd(null); // Clear the barcode to add state
+     }, [queryClient]);
 
 
     // --- Render Logic ---
@@ -380,7 +384,7 @@ const PurchaseForm: React.FC = () => {
                                 type="button"
                                 variant="link"
                                 className="text-xs h-auto p-0 mt-1"
-                                onClick={() => setIsAddProductDialogOpen(true)}
+                                onClick={() => setIsAddProductDialogOpen(true)} // Open dialog without prefilled barcode
                             >
                                 ¿Producto no encontrado? Agrégalo aquí.
                             </Button>
