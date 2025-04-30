@@ -17,7 +17,7 @@ import {
 import { Input } from '@/components/ui/input'; // For inline editing
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Save, X, Ban } from 'lucide-react'; // Icons for edit controls
+import { Save, X, Ban, Pencil } from 'lucide-react'; // Icons for edit controls // Added Pencil
 import { formatCurrency, cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { Product } from '@/types/product';
