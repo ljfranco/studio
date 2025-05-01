@@ -13,4 +13,5 @@ export interface UserData {
   isEnabled: boolean;
   createdAt?: Timestamp | Date;
   isGeneric?: boolean; // Flag for generic user
+  favorites?: string[]; // Array of favorite functionality IDs
 }
