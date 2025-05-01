@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -5,9 +6,30 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { useFirebase } from '@/context/FirebaseContext';
 import { Button } from '@/components/ui/button';
-import { LogOut, User, ShieldCheck } from 'lucide-react';
+import { LogOut, User, ShieldCheck, Home, Settings } from 'lucide-react'; // Added icons
 import { useRouter } from 'next/navigation'; // Import useRouter
 import { useToast } from '@/hooks/use-toast';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; // Import Avatar components
+
+// Helper to get initials from name
+const getInitials = (name?: string | null): string => {
+    if (!name) return '??';
+    const names = name.split(' ');
+    let initials = names[0].substring(0, 1).toUpperCase();
+    if (names.length > 1) {
+      initials += names[names.length - 1].substring(0, 1).toUpperCase();
+    }
+    return initials;
+};
+
 
 export const Navbar: React.FC = () => {
   const { user, loading, role } = useAuth();
@@ -34,34 +56,65 @@ export const Navbar: React.FC = () => {
   };
 
   return (
-    <nav className="bg-secondary shadow-md">
-      <div className="container mx-auto px-4 py-3 flex justify-between items-center">
+    <nav className="bg-card border-b shadow-sm"> {/* Adjusted background and added border */}
+      <div className="container mx-auto px-4 py-2 flex justify-between items-center"> {/* Adjusted padding */}
         <Link href="/" className="text-xl font-bold text-primary hover:text-primary/80 transition-colors">
           Cuenta Clara
         </Link>
 
         {!loading && (
-          <div className="flex items-center space-x-4">
-            {user && role === 'admin' && (
-               <Link href="/admin" passHref>
-                 <Button variant="ghost" size="sm">
-                   <ShieldCheck className="mr-2 h-4 w-4" /> Admin Panel
-                 </Button>
-               </Link>
-            )}
+          <div className="flex items-center space-x-3"> {/* Reduced space */}
             {user ? (
-               <>
-                 <span className="text-sm text-muted-foreground hidden sm:inline">
-                    Hola, {user.displayName || user.email}
-                 </span>
-                 <Button onClick={handleSignOut} variant="outline" size="sm">
-                   <LogOut className="mr-2 h-4 w-4" />
-                   Salir
-                 </Button>
-               </>
+               <DropdownMenu>
+                 <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="relative h-9 w-9 rounded-full"> {/* Slightly smaller avatar button */}
+                        <Avatar className="h-9 w-9"> {/* Match button size */}
+                         {/* Add AvatarImage if you have user profile images */}
+                         {/* <AvatarImage src={user.photoURL || undefined} alt={user.displayName || 'User'} /> */}
+                         <AvatarFallback>{getInitials(user.displayName)}</AvatarFallback>
+                        </Avatar>
+                    </Button>
+                 </DropdownMenuTrigger>
+                 <DropdownMenuContent className="w-56" align="end" forceMount>
+                    <DropdownMenuLabel className="font-normal">
+                        <div className="flex flex-col space-y-1">
+                         <p className="text-sm font-medium leading-none">{user.displayName || "Usuario"}</p>
+                         <p className="text-xs leading-none text-muted-foreground">
+                            {user.email}
+                         </p>
+                        </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                        <Link href="/">
+                         <Home className="mr-2 h-4 w-4" />
+                         <span>Dashboard</span>
+                        </Link>
+                    </DropdownMenuItem>
+                    {role === 'admin' && (
+                         <DropdownMenuItem asChild>
+                           <Link href="/admin">
+                             <ShieldCheck className="mr-2 h-4 w-4" />
+                             <span>Panel Admin</span>
+                           </Link>
+                         </DropdownMenuItem>
+                    )}
+                     <DropdownMenuItem asChild>
+                       <Link href="/profile">
+                         <Settings className="mr-2 h-4 w-4" />
+                         <span>Perfil</span>
+                       </Link>
+                     </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
+                        <LogOut className="mr-2 h-4 w-4" />
+                        <span>Salir</span>
+                    </DropdownMenuItem>
+                 </DropdownMenuContent>
+               </DropdownMenu>
             ) : (
                <Link href="/" passHref>
-                  <Button variant="default" size="sm">
+                  <Button variant="outline" size="sm"> {/* Use outline for consistency */}
                      <User className="mr-2 h-4 w-4" />
                      Ingresar / Registrarse
                   </Button>
