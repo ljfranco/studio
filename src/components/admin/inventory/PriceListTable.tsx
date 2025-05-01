@@ -246,7 +246,7 @@ const PriceListTable: React.FC = () => {
                         return (
                             <TableRow key={product.id} className={cn(isEditingThisRow && "bg-muted/50")}>
                                 {/* Product Name (Sticky Left 0) */}
-                                <TableCell className="font-medium sticky left-0 bg-inherit z-10">
+                                <TableCell className="font-medium sticky left-0 bg-background z-10"> {/* Changed bg-inherit to bg-background */}
                                     <div className="flex flex-col">
                                         <span>{product.name}</span>
                                         <span className="text-xs text-muted-foreground font-mono">{product.id}</span>
@@ -254,7 +254,7 @@ const PriceListTable: React.FC = () => {
                                 </TableCell>
 
                                  {/* Actions Cell (Sticky Left 150px) */}
-                                <TableCell className="text-center sticky left-[150px] bg-inherit z-10">
+                                <TableCell className="text-center sticky left-[150px] bg-background z-10"> {/* Changed bg-inherit to bg-background */}
                                     {isEditingThisRow ? (
                                         <div className="flex items-center justify-center space-x-1">
                                             <Button
