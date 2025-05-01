@@ -124,9 +124,10 @@ const PriceListTable: React.FC = () => {
     const productDocRef = doc(db, 'products', editingRowId);
     const updates: Partial<Product> = {};
     const purchasePriceUpdates: Record<string, number> = {};
+    let marginValueToSet: number | null | undefined = undefined; // To handle null/undefined correctly
 
     try {
-      // Validate and prepare updates
+      // Validate and prepare selling price update
       const sellingPriceStr = editValues['sellingPrice'];
       const sellingPriceNum = parseFloat(sellingPriceStr?.replace(/[^0-9.]+/g, ''));
       if (sellingPriceStr !== undefined && !isNaN(sellingPriceNum) && sellingPriceNum >= 0) {
@@ -137,14 +138,18 @@ const PriceListTable: React.FC = () => {
 
       // Validate and prepare margin update
       const marginStr = editValues['margin'];
-      const marginNum = parseFloat(marginStr?.replace(/[^0-9.]+/g, ''));
-      if (marginStr !== undefined && !isNaN(marginNum) && marginNum >= 0) {
-        updates.margin = marginNum;
-      } else if (marginStr !== undefined && marginStr.trim() !== '') { // Allow empty to clear margin
-        throw new Error(`Margen inválido: "${marginStr}"`);
-      } else if (marginStr !== undefined && marginStr.trim() === '') {
-          updates.margin = undefined; // Explicitly set to undefined to potentially remove field
-      }
+      if (marginStr !== undefined) {
+          if (marginStr.trim() === '') {
+              marginValueToSet = null; // Set to null if user cleared it
+          } else {
+              const marginNum = parseFloat(marginStr.replace(/[^0-9.]+/g, ''));
+              if (!isNaN(marginNum) && marginNum >= 0) {
+                  marginValueToSet = marginNum; // Set to the number if valid
+              } else {
+                  throw new Error(`Margen inválido: "${marginStr}"`);
+              }
+          }
+      } // If marginStr is undefined, marginValueToSet remains undefined
 
       // Prepare purchase price updates (unchanged logic)
       distributors.forEach(dist => {
@@ -165,12 +170,10 @@ const PriceListTable: React.FC = () => {
        if (updates.sellingPrice !== undefined) {
             firestoreUpdatePayload.sellingPrice = updates.sellingPrice;
        }
-        // Handle margin: set to value or null if empty string was provided
-        if (updates.margin !== undefined) {
-            firestoreUpdatePayload.margin = updates.margin;
-        } else if (marginStr !== undefined && marginStr.trim() === '') {
-            firestoreUpdatePayload.margin = null; // Store null explicitly if user cleared it
-        }
+       // Only include margin in the update if it was actually changed
+       if (marginValueToSet !== undefined) {
+           firestoreUpdatePayload.margin = marginValueToSet;
+       }
 
 
        // Add purchase prices using dot notation
@@ -220,7 +223,10 @@ const PriceListTable: React.FC = () => {
                 <Table>
                 <TableHeader>
                     <TableRow>
+                    {/* Sticky Product Column */}
                     <TableHead className="sticky left-0 bg-background z-10 min-w-[150px]">Producto</TableHead>
+                    {/* Sticky Actions Column - Adjusted left position */}
+                    <TableHead className="text-center sticky left-[150px] bg-background z-10 min-w-[100px]">Acciones</TableHead>
                     <TableHead className="text-right min-w-[120px]">Últ. P. Compra</TableHead>
                     <TableHead className="text-right min-w-[100px]">Margen (%)</TableHead>
                     <TableHead className="text-right min-w-[120px]">P. Venta Sug.</TableHead>
@@ -230,7 +236,7 @@ const PriceListTable: React.FC = () => {
                         {dist.name}
                         </TableHead>
                     ))}
-                    <TableHead className="text-center sticky right-0 bg-background z-10 min-w-[100px]">Acciones</TableHead>
+                    {/* Removed original sticky right Actions column header */}
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -239,12 +245,57 @@ const PriceListTable: React.FC = () => {
                         const isEditingThisRow = editingRowId === product.id;
                         return (
                             <TableRow key={product.id} className={cn(isEditingThisRow && "bg-muted/50")}>
-                                {/* Product Name (Sticky) */}
+                                {/* Product Name (Sticky Left 0) */}
                                 <TableCell className="font-medium sticky left-0 bg-inherit z-10">
                                     <div className="flex flex-col">
                                         <span>{product.name}</span>
                                         <span className="text-xs text-muted-foreground font-mono">{product.id}</span>
                                     </div>
+                                </TableCell>
+
+                                 {/* Actions Cell (Sticky Left 150px) */}
+                                <TableCell className="text-center sticky left-[150px] bg-inherit z-10">
+                                    {isEditingThisRow ? (
+                                        <div className="flex items-center justify-center space-x-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 text-green-600 hover:text-green-700"
+                                                onClick={saveChanges}
+                                                disabled={isSaving}
+                                                title="Guardar Cambios"
+                                            >
+                                                {isSaving ? <LoadingSpinner size="sm"/> : <Save className="h-4 w-4" />}
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 text-destructive hover:text-destructive/90"
+                                                onClick={cancelEditing}
+                                                disabled={isSaving}
+                                                title="Cancelar Edición"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8"
+                                                    onClick={() => startEditing(product)}
+                                                    title={`Editar precios de ${product.name}`}
+                                                >
+                                                    <Pencil className="h-4 w-4" />
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p>Editar Precios y Margen</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    )}
                                 </TableCell>
 
                                 {/* Last Purchase Price */}
@@ -312,52 +363,7 @@ const PriceListTable: React.FC = () => {
                                     </TableCell>
                                 );
                                 })}
-
-                                {/* Actions Cell (Sticky) */}
-                                <TableCell className="text-center sticky right-0 bg-inherit z-10">
-                                    {isEditingThisRow ? (
-                                        <div className="flex items-center justify-center space-x-1">
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-7 w-7 text-green-600 hover:text-green-700"
-                                                onClick={saveChanges}
-                                                disabled={isSaving}
-                                                title="Guardar Cambios"
-                                            >
-                                                {isSaving ? <LoadingSpinner size="sm"/> : <Save className="h-4 w-4" />}
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-7 w-7 text-destructive hover:text-destructive/90"
-                                                onClick={cancelEditing}
-                                                disabled={isSaving}
-                                                title="Cancelar Edición"
-                                            >
-                                                <X className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    ) : (
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8"
-                                                    onClick={() => startEditing(product)}
-                                                    title={`Editar precios de ${product.name}`}
-                                                >
-                                                    <Pencil className="h-4 w-4" />
-                                                </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                                <p>Editar Precios y Margen</p>
-                                            </TooltipContent>
-                                        </Tooltip>
-                                    )}
-                                </TableCell>
-
+                                 {/* Removed original sticky right Actions Cell */}
                             </TableRow>
                         )
                     })}
@@ -372,4 +378,3 @@ const PriceListTable: React.FC = () => {
 };
 
 export default PriceListTable;
-
