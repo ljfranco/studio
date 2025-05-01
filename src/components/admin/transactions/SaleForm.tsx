@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -85,7 +84,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
     const [selectedUserId, setSelectedUserId] = useState<string>('');
     const [saleItems, setSaleItems] = useState<SaleDetail[]>([]);
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-    const [quantity, setQuantity] = useState<number>(1);
+    const [quantity, setQuantity] = useState<number | ''>(''); // Allow empty string for placeholder
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
     const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
@@ -109,7 +108,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
              setSaleItems([]);
              setSelectedProduct(null);
              setSearchText('');
-             setQuantity(1);
+             setQuantity(''); // Reset quantity
         }
     }, [isEditMode, saleToEdit]); // Depend on edit mode and the sale data
 
@@ -145,6 +144,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
         const product = products.find(p => p.id === barcode);
         setSelectedProduct(product || null);
         setSearchText(product ? `${product.name} (${product.id})` : ''); // Update search text display
+        setQuantity(''); // Reset quantity when selecting a new product
      };
 
 
@@ -193,6 +193,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                   if (product) {
                       setSelectedProduct(product);
                        setSearchText(`${product.name} (${product.id})`); // Update search text
+                       setQuantity(''); // Reset quantity on scan
                       toast({ title: "Código Detectado", description: `${product.name}` });
                       setIsScanning(false); // Stop scanning after successful detection
                   } else {
@@ -221,13 +222,15 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
          if (!isScanning) { // Clear selection only when STARTING the scan
               setSelectedProduct(null);
               setSearchText('');
+              setQuantity(''); // Reset quantity
           }
        };
 
 
     // --- Sale Item Management ---
     const handleAddItem = () => {
-        if (!selectedProduct || quantity <= 0) {
+        const currentQuantity = Number(quantity); // Convert '' or number to number
+        if (!selectedProduct || !quantity || currentQuantity <= 0) { // Check if quantity is empty or <= 0
             toast({ title: 'Error', description: 'Selecciona un producto y una cantidad válida.', variant: 'destructive' });
             return;
         }
@@ -240,10 +243,10 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
         const existingItem = saleItems.find(item => item.productId === selectedProduct.id);
         const currentQuantityInCart = existingItem?.quantity ?? 0;
 
-        if (currentQuantityInCart + quantity > currentStock) {
+        if (currentQuantityInCart + currentQuantity > currentStock) {
              toast({
                 title: 'Stock Insuficiente',
-                description: `Stock total: ${currentStock}. En carrito: ${currentQuantityInCart}. Intentas agregar: ${quantity}.`,
+                description: `Stock total: ${currentStock}. En carrito: ${currentQuantityInCart}. Intentas agregar: ${currentQuantity}.`,
                 variant: 'destructive',
                 duration: 5000 // Longer duration for stock errors
             });
@@ -256,16 +259,16 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
         if (existingItem) {
             updatedItems = saleItems.map(item =>
                 item.productId === selectedProduct.id
-                    ? { ...item, quantity: item.quantity + quantity, totalPrice: (item.quantity + quantity) * price }
+                    ? { ...item, quantity: item.quantity + currentQuantity, totalPrice: (item.quantity + currentQuantity) * price }
                     : item
             );
         } else {
             const newItem: SaleDetail = {
                 productId: selectedProduct.id,
                 productName: selectedProduct.name,
-                quantity: quantity,
+                quantity: currentQuantity,
                 unitPrice: price,
-                totalPrice: quantity * price,
+                totalPrice: currentQuantity * price,
             };
             updatedItems = [...saleItems, newItem];
         }
@@ -274,7 +277,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
         // Reset inputs
         setSelectedProduct(null);
         setSearchText(''); // Clear search text
-        setQuantity(1);
+        setQuantity(''); // Reset quantity to empty for placeholder
     };
 
     const handleRemoveItem = (productId: string) => {
@@ -428,7 +431,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                 setSaleItems([]);
                 setSelectedProduct(null);
                 setSearchText('');
-                setQuantity(1);
+                setQuantity(''); // Reset quantity
             }
 
             queryClient.invalidateQueries({ queryKey: ['products'] });
@@ -554,8 +557,9 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                             type="number"
                             min="1"
                             step="1"
+                            placeholder="Cant." // Use placeholder
                             value={quantity}
-                            onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 1)}
+                            onChange={(e) => setQuantity(e.target.value === '' ? '' : parseInt(e.target.value, 10) || '')} // Allow empty string
                             className="w-full sm:w-20 text-center"
                             disabled={!selectedProduct || isSubmitting || !isCustomerSelected} // Disable if no customer
                         />
@@ -565,7 +569,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                      <Button
                         type="button"
                         onClick={handleAddItem}
-                        disabled={!selectedProduct || quantity <= 0 || isSubmitting || !isCustomerSelected} // Disable if no customer
+                        disabled={!selectedProduct || !quantity || quantity <= 0 || isSubmitting || !isCustomerSelected} // Disable if no customer, update disabled check
                         className="w-full sm:w-auto"
                      >
                         <PlusCircle className="mr-2 h-4 w-4" /> Agregar
