@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { collection, getDocs } from 'firebase/firestore'; // Removed doc, updateDoc
 import { useFirebase } from '@/context/FirebaseContext';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input'; // Import Input
 import {
   Table,
   TableBody,
@@ -16,7 +17,7 @@ import {
 // Removed Input import
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Ban, Pencil, Percent, Info, FileDown } from 'lucide-react'; // Removed Save, X icons, Added FileDown
+import { Ban, Pencil, Percent, Info, FileDown, Search } from 'lucide-react'; // Removed Save, X icons, Added FileDown, Search
 import { formatCurrency, cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { Product } from '@/types/product';
@@ -62,6 +63,7 @@ const PriceListTable: React.FC = () => {
   const { toast } = useToast();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false); // State for modal
   const [selectedProductForEdit, setSelectedProductForEdit] = useState<Product | null>(null); // State for product to edit
+  const [searchTerm, setSearchTerm] = useState(''); // State for search term
 
   // Fetch products
   const { data: products = [], isLoading: isLoadingProducts, error: errorProducts } = useQuery<Product[]>({
@@ -78,10 +80,23 @@ const PriceListTable: React.FC = () => {
   const isLoading = isLoadingProducts || isLoadingDistributors;
   const error = errorProducts || errorDistributors;
 
-  // Calculate lowest purchase price and identify the distributor (unchanged)
+   // Filter products based on search term
+   const filteredProducts = useMemo(() => {
+    if (!searchTerm) {
+      return products;
+    }
+    const lowerCaseSearchTerm = searchTerm.toLowerCase();
+    return products.filter(product =>
+      product.name.toLowerCase().includes(lowerCaseSearchTerm) ||
+      product.id.toLowerCase().includes(lowerCaseSearchTerm)
+    );
+  }, [products, searchTerm]);
+
+
+  // Calculate lowest purchase price and identify the distributor using filtered data
   const lowestPrices = useMemo(() => {
     const prices: Record<string, { price: number; distributorId: string | null }> = {};
-    products.forEach(product => {
+    filteredProducts.forEach(product => { // Use filteredProducts
       let lowest = Infinity;
       let lowestDistributorId: string | null = null;
       if (product.purchasePrices) {
@@ -95,7 +110,7 @@ const PriceListTable: React.FC = () => {
       prices[product.id] = { price: lowest === Infinity ? 0 : lowest, distributorId: lowestDistributorId };
     });
     return prices;
-  }, [products]);
+  }, [filteredProducts]); // Depend on filteredProducts
 
   // Calculate suggested selling price based on last purchase price and margin
   const calculateSuggestedPrice = (product: Product): number | null => {
@@ -119,9 +134,9 @@ const PriceListTable: React.FC = () => {
    };
 
 
-   // --- Export Functions ---
+   // --- Export Functions (Use filteredProducts for exports) ---
    const handleExportExcel = () => {
-    const dataToExport = products.map(product => {
+    const dataToExport = filteredProducts.map(product => { // Use filteredProducts
         const suggestedPrice = calculateSuggestedPrice(product);
         const baseData: any = {
             'Código': product.id,
@@ -148,6 +163,13 @@ const PriceListTable: React.FC = () => {
                     newRow[key] = parseFloat(newRow[key]); // Format as number (currency)
                 } else if (key.includes('Margen (%)')) {
                      newRow[key] = parseFloat(newRow[key]); // Format as number (percentage)
+                }
+            } else if (typeof newRow[key] === 'number'){
+                 // Ensure existing numbers are handled correctly
+                 if (key.includes('P. Venta') || key.includes('P. Compra') || distributors.some(d => d.name === key)) {
+                    // Currency - no change needed if already number
+                } else if (key.includes('Margen (%)')) {
+                     // Percentage - no change needed if already number
                 }
             }
         });
@@ -181,7 +203,7 @@ const PriceListTable: React.FC = () => {
         currencyCols.forEach(C => {
              const cell_address = { c: C, r: R };
              const cell_ref = XLSX.utils.encode_cell(cell_address);
-             if (worksheet[cell_ref]) {
+             if (worksheet[cell_ref] && typeof worksheet[cell_ref].v === 'number') { // Check if value is number
                  worksheet[cell_ref].t = 'n'; // Set type to number
                  worksheet[cell_ref].z = '$#,##0.00'; // Currency format
              }
@@ -189,9 +211,12 @@ const PriceListTable: React.FC = () => {
 
         // Apply percentage format to Margin column (index 3)
          const marginCellRef = XLSX.utils.encode_cell({ c: 3, r: R });
-         if (worksheet[marginCellRef]) {
+         if (worksheet[marginCellRef] && typeof worksheet[marginCellRef].v === 'number') { // Check if value is number
              worksheet[marginCellRef].t = 'n';
              worksheet[marginCellRef].z = '0.0"%"'; // Percentage format
+             // Divide by 100 if storing as whole number but want Excel % format
+             // worksheet[marginCellRef].v = worksheet[marginCellRef].v / 100;
+             // worksheet[marginCellRef].z = '0.0%'; // Use standard Excel % format
          }
     }
 
@@ -209,7 +234,7 @@ const PriceListTable: React.FC = () => {
      ];
      const tableRows: (string | number)[][] = [];
 
-     products.forEach(product => {
+     filteredProducts.forEach(product => { // Use filteredProducts
         const suggestedPrice = calculateSuggestedPrice(product);
         const productData = [
             product.id,
@@ -266,26 +291,43 @@ const PriceListTable: React.FC = () => {
   return (
     <TooltipProvider>
         <Card>
-        <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-4">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between flex-wrap gap-4">
+             {/* Title and Description */}
             <div>
                  <CardTitle>Lista de Precios</CardTitle>
-                 <CardDescription>Comparativa de precios de venta y compra por distribuidor.</CardDescription>
+                 <CardDescription>Comparativa de precios de venta y compra. Busca por nombre o código.</CardDescription>
             </div>
-             {/* Export Buttons */}
-             <div className="flex gap-2">
-                <Button variant="outline" onClick={handleExportExcel} disabled={products.length === 0 || isLoading}>
-                    <FileDown className="mr-2 h-4 w-4" /> Excel (.xlsx)
-                </Button>
-                <Button variant="outline" onClick={handleExportPDF} disabled={products.length === 0 || isLoading}>
-                     <FileDown className="mr-2 h-4 w-4" /> PDF
-                </Button>
+            {/* Search and Export */}
+             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+                 {/* Search Input */}
+                <div className="relative w-full sm:w-auto">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        type="search"
+                        placeholder="Buscar producto..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-8 w-full sm:w-56" // Adjust width
+                    />
+                </div>
+                 {/* Export Buttons */}
+                 <div className="flex gap-2 w-full sm:w-auto">
+                    <Button variant="outline" onClick={handleExportExcel} disabled={filteredProducts.length === 0 || isLoading} className="flex-1 sm:flex-none">
+                        <FileDown className="mr-2 h-4 w-4" /> Excel
+                    </Button>
+                    <Button variant="outline" onClick={handleExportPDF} disabled={filteredProducts.length === 0 || isLoading} className="flex-1 sm:flex-none">
+                         <FileDown className="mr-2 h-4 w-4" /> PDF
+                    </Button>
+                 </div>
              </div>
         </CardHeader>
         <CardContent>
             {isLoading ? (
             <div className="flex justify-center items-center h-40"><LoadingSpinner /></div>
-            ) : products.length === 0 ? (
-            <p className="text-center text-muted-foreground">No hay productos para mostrar precios.</p>
+            ) : filteredProducts.length === 0 ? (
+                <p className="text-center text-muted-foreground">
+                    {searchTerm ? 'No se encontraron productos.' : 'No hay productos para mostrar precios.'}
+                </p>
             ) : (
             <div className="overflow-x-auto border rounded-md"> {/* Added border and rounded */}
                 <Table className="min-w-full"> {/* Ensure table takes minimum full width */}
@@ -307,7 +349,7 @@ const PriceListTable: React.FC = () => {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {products.map((product) => {
+                    {filteredProducts.map((product) => {
                         const suggestedPrice = calculateSuggestedPrice(product);
                         return (
                             <TableRow key={product.id} className="hover:bg-muted/50">

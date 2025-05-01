@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react'; // Added useMemo
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { useFirebase } from '@/context/FirebaseContext';
@@ -13,9 +13,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Input } from '@/components/ui/input'; // Import Input
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { PlusCircle, Pencil, Trash2 } from 'lucide-react';
+import { PlusCircle, Pencil, Trash2, Search } from 'lucide-react'; // Added Search icon
 import { formatCurrency } from '@/lib/utils';
 import AddEditProductDialog from './AddEditProductDialog'; // Import the dialog
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"; // For delete confirmation
@@ -47,6 +48,7 @@ const ProductTable: React.FC = () => {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [searchTerm, setSearchTerm] = useState(''); // State for search term
 
 
   // Fetch products using React Query
@@ -54,6 +56,19 @@ const ProductTable: React.FC = () => {
     queryKey: ['products'],
     queryFn: () => fetchProducts(db),
   });
+
+  // Filter products based on search term
+  const filteredProducts = useMemo(() => {
+    if (!searchTerm) {
+      return products;
+    }
+    const lowerCaseSearchTerm = searchTerm.toLowerCase();
+    return products.filter(product =>
+      product.name.toLowerCase().includes(lowerCaseSearchTerm) ||
+      product.id.toLowerCase().includes(lowerCaseSearchTerm)
+    );
+  }, [products, searchTerm]);
+
 
   // Mutation for deleting a product
    const deleteMutation = useMutation({
@@ -102,22 +117,36 @@ const ProductTable: React.FC = () => {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-4">
         <div>
           <CardTitle>Inventario de Productos</CardTitle>
-          <CardDescription>Lista de productos en stock.</CardDescription>
+          <CardDescription>Lista de productos en stock. Busca por nombre o código.</CardDescription>
         </div>
         <Button onClick={handleAddProduct}>
           <PlusCircle className="mr-2 h-4 w-4" /> Agregar Producto
         </Button>
       </CardHeader>
       <CardContent>
+        {/* Search Input */}
+        <div className="mb-4 relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+                type="search"
+                placeholder="Buscar por nombre o código..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8 w-full sm:w-64" // Adjust width as needed
+            />
+        </div>
+
         {isLoading ? (
           <div className="flex justify-center items-center h-40"><LoadingSpinner /></div>
-        ) : products.length === 0 ? (
-          <p className="text-center text-muted-foreground">No hay productos en el inventario.</p>
+        ) : filteredProducts.length === 0 ? (
+           <p className="text-center text-muted-foreground">
+             {searchTerm ? 'No se encontraron productos.' : 'No hay productos en el inventario.'}
+            </p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto border rounded-md">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -130,7 +159,7 @@ const ProductTable: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {products.map((product) => (
+                {filteredProducts.map((product) => (
                   <TableRow key={product.id}>
                     <TableCell className="font-mono text-xs">{product.id}</TableCell>
                     <TableCell className="font-medium">{product.name}</TableCell>
