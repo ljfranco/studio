@@ -1,4 +1,3 @@
-
 'use client';
 
 import React from 'react';
@@ -6,7 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { useFirebase } from '@/context/FirebaseContext';
 import { Button } from '@/components/ui/button';
-import { LogOut, User, ShieldCheck, Settings, Star } from 'lucide-react'; // Import Star for Favorites
+import { LogOut, User, ShieldCheck, Settings, Star, Home } from 'lucide-react'; // Import Star and Home icons
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -92,43 +91,64 @@ export const Navbar: React.FC = () => {
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
 
-                    {/* Admin Panel Link */}
-                    {role === 'admin' && (
-                         <DropdownMenuItem asChild>
-                           <Link href="/admin">
-                             <ShieldCheck className="mr-2 h-4 w-4" />
-                             <span>Panel Admin</span>
-                           </Link>
-                         </DropdownMenuItem>
-                    )}
-
-                     {/* User Profile Link */}
-                     <DropdownMenuItem asChild>
-                       <Link href="/profile">
-                         <Settings className="mr-2 h-4 w-4" />
-                         <span>Mi Perfil</span>
-                       </Link>
-                     </DropdownMenuItem>
-
-                     {/* Favorites Section */}
-                     {favoriteFunctionalities.length > 0 && (
+                    {/* Conditional Menu Items based on role */}
+                    {role === 'admin' ? (
                         <>
-                           <DropdownMenuSeparator />
-                           <DropdownMenuLabel>Favoritos</DropdownMenuLabel>
-                           {favoriteFunctionalities.map(fav => (
-                               <DropdownMenuItem key={fav.id} asChild>
-                                   <Link href={fav.route}>
-                                        {fav.icon && <fav.icon className="mr-2 h-4 w-4"/>}
-                                        <span>{fav.name}</span>
-                                   </Link>
-                               </DropdownMenuItem>
-                           ))}
+                             {/* Admin Panel Link */}
+                            <DropdownMenuItem asChild>
+                            <Link href="/admin">
+                                <ShieldCheck className="mr-2 h-4 w-4" />
+                                <span>Panel Admin</span>
+                            </Link>
+                            </DropdownMenuItem>
+
+                            {/* User Profile Link (also for admin) */}
+                            <DropdownMenuItem asChild>
+                                <Link href="/profile">
+                                    <Settings className="mr-2 h-4 w-4" />
+                                    <span>Mi Perfil</span>
+                                </Link>
+                            </DropdownMenuItem>
+
+                            {/* Favorites Section for Admin */}
+                            {favoriteFunctionalities.length > 0 && (
+                                <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuLabel>Favoritos</DropdownMenuLabel>
+                                {favoriteFunctionalities.map(fav => (
+                                    <DropdownMenuItem key={fav.id} asChild>
+                                        <Link href={fav.route}>
+                                            {fav.icon && <fav.icon className="mr-2 h-4 w-4"/>}
+                                            <span>{fav.name}</span>
+                                        </Link>
+                                    </DropdownMenuItem>
+                                ))}
+                                </>
+                            )}
                         </>
-                     )}
+                    ) : ( // User role menu items
+                         <>
+                            {/* Home Link */}
+                             <DropdownMenuItem asChild>
+                                <Link href="/">
+                                    <Home className="mr-2 h-4 w-4" />
+                                    <span>Inicio</span>
+                                </Link>
+                             </DropdownMenuItem>
+
+                            {/* User Profile Link */}
+                            <DropdownMenuItem asChild>
+                                <Link href="/profile">
+                                    <Settings className="mr-2 h-4 w-4" />
+                                    <span>Mi Perfil</span>
+                                </Link>
+                            </DropdownMenuItem>
+                         </>
+                    )}
 
 
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
+                    <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer">
                         <LogOut className="mr-2 h-4 w-4" />
                         <span>Salir</span>
                     </DropdownMenuItem>
@@ -148,3 +168,4 @@ export const Navbar: React.FC = () => {
     </nav>
   );
 };
+
