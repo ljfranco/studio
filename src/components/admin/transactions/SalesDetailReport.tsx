@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -45,6 +44,10 @@ const SalesDetailReport: React.FC = () => {
     // Use state for individual from and to dates
     const [fromDate, setFromDate] = useState<Date | undefined>(startOfDay(new Date()));
     const [toDate, setToDate] = useState<Date | undefined>(endOfDay(new Date()));
+
+    // State to control popover visibility
+    const [fromPopoverOpen, setFromPopoverOpen] = useState(false);
+    const [toPopoverOpen, setToPopoverOpen] = useState(false);
 
     // Derive dateRange for useEffect dependency
     const dateRange = useMemo(() => ({ from: fromDate, to: toDate }), [fromDate, toDate]);
@@ -189,7 +192,7 @@ const SalesDetailReport: React.FC = () => {
                 {/* From Date */}
                 <div className="flex flex-col gap-1">
                     <Label htmlFor="from-date">Desde</Label>
-                    <Popover>
+                    <Popover open={fromPopoverOpen} onOpenChange={setFromPopoverOpen}>
                         <PopoverTrigger asChild>
                         <Button
                             id="from-date"
@@ -203,11 +206,14 @@ const SalesDetailReport: React.FC = () => {
                             {fromDate ? format(fromDate, "dd/MM/yyyy", {locale: es}) : <span>Selecciona</span>}
                         </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
+                        <PopoverContent className="w-auto p-0" align="start" side="bottom"> {/* Ensure side is bottom */}
                         <Calendar
                             mode="single"
                             selected={fromDate}
-                            onSelect={setFromDate}
+                            onSelect={(date) => {
+                                setFromDate(date);
+                                setFromPopoverOpen(false); // Close popover on select
+                            }}
                             initialFocus
                             locale={es}
                         />
@@ -218,7 +224,7 @@ const SalesDetailReport: React.FC = () => {
                  {/* To Date */}
                  <div className="flex flex-col gap-1">
                     <Label htmlFor="to-date">Hasta</Label>
-                    <Popover>
+                    <Popover open={toPopoverOpen} onOpenChange={setToPopoverOpen}>
                         <PopoverTrigger asChild>
                         <Button
                             id="to-date"
@@ -232,11 +238,14 @@ const SalesDetailReport: React.FC = () => {
                             {toDate ? format(toDate, "dd/MM/yyyy", {locale: es}) : <span>Selecciona</span>}
                         </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
+                        <PopoverContent className="w-auto p-0" align="start" side="bottom"> {/* Ensure side is bottom */}
                         <Calendar
                             mode="single"
                             selected={toDate}
-                            onSelect={setToDate}
+                            onSelect={(date) => {
+                                setToDate(date);
+                                setToPopoverOpen(false); // Close popover on select
+                            }}
                             initialFocus
                             locale={es}
                             // Optionally disable dates before fromDate
@@ -338,3 +347,5 @@ const SalesDetailReport: React.FC = () => {
 // Export the fetchUserNames function if it's used elsewhere, otherwise keep it internal
 export { fetchUserNames };
 export default SalesDetailReport;
+
+    
