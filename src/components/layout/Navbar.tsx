@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ALL_FUNCTIONALITIES } from '@/lib/functionalities'; // Import functionalities list
+import { ThemeToggle } from './ThemeToggle'; // Import ThemeToggle
 
 // Helper to get initials from name
 const getInitials = (name?: string | null): string => {
@@ -68,104 +69,109 @@ export const Navbar: React.FC = () => {
           Cuenta Clara
         </Link>
 
-        {!loading && (
-          <div className="flex items-center space-x-3">
-            {user ? (
-               <DropdownMenu>
-                 <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="relative h-9 w-9 rounded-full">
-                        <Avatar className="h-9 w-9">
-                         {/* <AvatarImage src={user.photoURL || undefined} alt={user.displayName || 'User'} /> */}
-                         <AvatarFallback>{getInitials(user.displayName)}</AvatarFallback>
-                        </Avatar>
-                    </Button>
-                 </DropdownMenuTrigger>
-                 <DropdownMenuContent className="w-56" align="end" forceMount>
-                    <DropdownMenuLabel className="font-normal">
-                        <div className="flex flex-col space-y-1">
-                         <p className="text-sm font-medium leading-none">{user.displayName || "Usuario"}</p>
-                         <p className="text-xs leading-none text-muted-foreground">
-                            {user.email}
-                         </p>
-                        </div>
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
+        <div className="flex items-center space-x-3">
+           {/* Theme Toggle Button */}
+           <ThemeToggle />
 
-                    {/* Conditional Menu Items based on role */}
-                    {role === 'admin' ? (
-                        <>
-                             {/* Admin Panel Link */}
-                            <DropdownMenuItem asChild>
-                            <Link href="/admin">
-                                <ShieldCheck className="mr-2 h-4 w-4" />
-                                <span>Panel Admin</span>
-                            </Link>
-                            </DropdownMenuItem>
+           {/* Auth related elements */}
+           {!loading && (
+                <>
+                    {user ? (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+                                <Avatar className="h-9 w-9">
+                                {/* <AvatarImage src={user.photoURL || undefined} alt={user.displayName || 'User'} /> */}
+                                <AvatarFallback>{getInitials(user.displayName)}</AvatarFallback>
+                                </Avatar>
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent className="w-56" align="end" forceMount>
+                            <DropdownMenuLabel className="font-normal">
+                                <div className="flex flex-col space-y-1">
+                                <p className="text-sm font-medium leading-none">{user.displayName || "Usuario"}</p>
+                                <p className="text-xs leading-none text-muted-foreground">
+                                    {user.email}
+                                </p>
+                                </div>
+                            </DropdownMenuLabel>
+                            <DropdownMenuSeparator />
 
-                            {/* User Profile Link (also for admin) */}
-                            <DropdownMenuItem asChild>
-                                <Link href="/profile">
-                                    <Settings className="mr-2 h-4 w-4" />
-                                    <span>Mi Perfil</span>
-                                </Link>
-                            </DropdownMenuItem>
-
-                            {/* Favorites Section for Admin */}
-                            {favoriteFunctionalities.length > 0 && (
+                            {/* Conditional Menu Items based on role */}
+                            {role === 'admin' ? (
                                 <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuLabel>Favoritos</DropdownMenuLabel>
-                                {favoriteFunctionalities.map(fav => (
-                                    <DropdownMenuItem key={fav.id} asChild>
-                                        <Link href={fav.route}>
-                                            {fav.icon && <fav.icon className="mr-2 h-4 w-4"/>}
-                                            <span>{fav.name}</span>
+                                    {/* Admin Panel Link */}
+                                    <DropdownMenuItem asChild>
+                                    <Link href="/admin">
+                                        <ShieldCheck className="mr-2 h-4 w-4" />
+                                        <span>Panel Admin</span>
+                                    </Link>
+                                    </DropdownMenuItem>
+
+                                    {/* User Profile Link (also for admin) */}
+                                    <DropdownMenuItem asChild>
+                                        <Link href="/profile">
+                                            <Settings className="mr-2 h-4 w-4" />
+                                            <span>Mi Perfil</span>
                                         </Link>
                                     </DropdownMenuItem>
-                                ))}
+
+                                    {/* Favorites Section for Admin */}
+                                    {favoriteFunctionalities.length > 0 && (
+                                        <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuLabel>Favoritos</DropdownMenuLabel>
+                                        {favoriteFunctionalities.map(fav => (
+                                            <DropdownMenuItem key={fav.id} asChild>
+                                                <Link href={fav.route}>
+                                                    {fav.icon && <fav.icon className="mr-2 h-4 w-4"/>}
+                                                    <span>{fav.name}</span>
+                                                </Link>
+                                            </DropdownMenuItem>
+                                        ))}
+                                        </>
+                                    )}
+                                </>
+                            ) : ( // User role menu items
+                                <>
+                                    {/* Home Link */}
+                                    <DropdownMenuItem asChild>
+                                        <Link href="/">
+                                            <Home className="mr-2 h-4 w-4" />
+                                            <span>Inicio</span>
+                                        </Link>
+                                    </DropdownMenuItem>
+
+                                    {/* User Profile Link */}
+                                    <DropdownMenuItem asChild>
+                                        <Link href="/profile">
+                                            <Settings className="mr-2 h-4 w-4" />
+                                            <span>Mi Perfil</span>
+                                        </Link>
+                                    </DropdownMenuItem>
                                 </>
                             )}
-                        </>
-                    ) : ( // User role menu items
-                         <>
-                            {/* Home Link */}
-                             <DropdownMenuItem asChild>
-                                <Link href="/">
-                                    <Home className="mr-2 h-4 w-4" />
-                                    <span>Inicio</span>
-                                </Link>
-                             </DropdownMenuItem>
 
-                            {/* User Profile Link */}
-                            <DropdownMenuItem asChild>
-                                <Link href="/profile">
-                                    <Settings className="mr-2 h-4 w-4" />
-                                    <span>Mi Perfil</span>
-                                </Link>
+
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer">
+                                <LogOut className="mr-2 h-4 w-4" />
+                                <span>Salir</span>
                             </DropdownMenuItem>
-                         </>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    ) : (
+                    <Link href="/" passHref>
+                        <Button variant="outline" size="sm">
+                            <User className="mr-2 h-4 w-4" />
+                            Ingresar / Registrarse
+                        </Button>
+                    </Link>
                     )}
-
-
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer">
-                        <LogOut className="mr-2 h-4 w-4" />
-                        <span>Salir</span>
-                    </DropdownMenuItem>
-                 </DropdownMenuContent>
-               </DropdownMenu>
-            ) : (
-               <Link href="/" passHref>
-                  <Button variant="outline" size="sm">
-                     <User className="mr-2 h-4 w-4" />
-                     Ingresar / Registrarse
-                  </Button>
-               </Link>
+                </>
             )}
-          </div>
-        )}
+         </div>
       </div>
     </nav>
   );
 };
-
