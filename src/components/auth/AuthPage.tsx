@@ -11,7 +11,7 @@ const AuthPage: React.FC = () => {
     <div className="flex justify-center items-center min-h-[calc(100vh-10rem)]">
       <Card className="w-full max-w-md shadow-lg">
          <CardHeader className="text-center">
-           <CardTitle className="text-2xl font-bold">Cuenta Clara</CardTitle>
+           <CardTitle className="text-2xl font-bold">EasyManage</CardTitle> {/* Updated Name */}
            <CardDescription>Accede o crea tu cuenta</CardDescription>
          </CardHeader>
          <CardContent>

@@ -66,7 +66,7 @@ export const Navbar: React.FC = () => {
     <nav className="bg-card border-b shadow-sm">
       <div className="container mx-auto px-4 py-2 flex justify-between items-center">
         <Link href="/" className="text-xl font-bold text-primary hover:text-primary/80 transition-colors">
-          Cuenta Clara
+          EasyManage {/* Updated Name */}
         </Link>
 
         <div className="flex items-center space-x-3">
