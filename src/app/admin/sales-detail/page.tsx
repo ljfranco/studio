@@ -1,13 +1,13 @@
 
 import React from 'react';
-import DailyBalanceReport from '@/components/admin/transactions/DailyBalanceReport'; // Import the new component
+import SalesDetailReport from '@/components/admin/transactions/SalesDetailReport'; // Import the renamed component
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
-// Page for viewing the daily balance report
-export default function DailyBalancePage() {
+// Page for viewing the sales detail report
+export default function SalesDetailPage() {
   return (
     <div className="space-y-4">
       {/* Back Button */}
@@ -19,13 +19,13 @@ export default function DailyBalancePage() {
 
       <Card className="shadow-md">
         <CardHeader>
-          <CardTitle className="text-2xl">Balance del Día</CardTitle>
+          <CardTitle className="text-2xl">Detalle de Ventas</CardTitle>
           <CardDescription>
-            Detalle de ventas del día agrupadas por cliente y totales.
+            Filtra y visualiza las ventas realizadas en un período específico, agrupadas por cliente.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <DailyBalanceReport />
+          <SalesDetailReport />
         </CardContent>
       </Card>
     </div>
