@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -115,7 +116,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
     // --- Data Fetching ---
     const { data: users = [], isLoading: isLoadingUsers, error: errorUsers } = useQuery<UserData[]>({
         queryKey: ['saleUsers'], // Distinct query key
-        fn: () => fetchUsers(db),
+        queryFn: () => fetchUsers(db), // Use queryFn instead of fn
         staleTime: 1000 * 60 * 5, // Cache users for 5 minutes
     });
 
