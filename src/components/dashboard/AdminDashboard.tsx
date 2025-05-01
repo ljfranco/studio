@@ -25,7 +25,7 @@ const AdminDashboard: React.FC = () => {
         { title: 'Estados de Cuenta', href: '/admin/accounts', icon: ListChecks, description: 'Ver y gestionar saldos de clientes.' },
         { title: 'Inventario Productos', href: '/admin/inventory', icon: Package, description: 'Gestionar stock y precios.' },
         { title: 'Registrar Transacciones', href: '/admin/transactions', icon: FileText, description: 'Ingresar ventas, compras o cobros.' },
-        { title: 'Balance del Día', href: '/admin/daily-balance', icon: Receipt, description: 'Ver resumen de ventas diarias.' },
+        { title: 'Detalle de Ventas', href: '/admin/sales-detail', icon: Receipt, description: 'Ver resumen de ventas por fecha.' }, // Updated Title and href
         // Future sections can be added here
         // { title: 'Reportes', href: '/admin/reports', icon: LineChart, description: 'Ver reportes de ventas y stock.' },
     ];

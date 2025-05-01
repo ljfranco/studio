@@ -3,16 +3,20 @@
 import * as React from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { DayPicker } from "react-day-picker"
+import type { Locale } from "date-fns"; // Import Locale type
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
 
-export type CalendarProps = React.ComponentProps<typeof DayPicker>
+export type CalendarProps = React.ComponentProps<typeof DayPicker> & {
+  locale?: Locale; // Add locale prop
+}
 
 function Calendar({
   className,
   classNames,
   showOutsideDays = true,
+  locale, // Destructure locale prop
   ...props
 }: CalendarProps) {
   return (
@@ -53,6 +57,7 @@ function Calendar({
         day_hidden: "invisible",
         ...classNames,
       }}
+      locale={locale} // Pass locale to DayPicker
       components={{
         IconLeft: ({ className, ...props }) => (
           <ChevronLeft className={cn("h-4 w-4", className)} {...props} />
