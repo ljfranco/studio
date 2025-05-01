@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -8,7 +9,6 @@ import { collection, getDocs, doc, runTransaction, Timestamp, writeBatch, query,
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-// Removed Select import as distributor is removed
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Combobox } from '@/components/ui/combobox';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -17,7 +17,6 @@ import { formatCurrency, cn } from '@/lib/utils';
 import { PlusCircle, ScanLine, Trash2, Camera, Ban, Truck } from 'lucide-react';
 import type { User as AuthUser } from 'firebase/auth';
 import type { Product } from '@/types/product';
-// Removed Distributor import
 import type { Transaction } from '@/types/transaction';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import AddEditProductDialog from '../inventory/AddEditProductDialog'; // Import AddEditProductDialog
@@ -32,8 +31,6 @@ interface PurchaseItem {
 }
 
 // --- Fetching Functions ---
-// Removed fetchDistributors
-
 const fetchProducts = async (db: any): Promise<Product[]> => {
     const productsCol = collection(db, 'products');
     const snapshot = await getDocs(productsCol);
@@ -46,7 +43,6 @@ const PurchaseForm: React.FC = () => {
     const { user: adminUser } = useAuth(); // Admin performing the purchase
     const { toast } = useToast();
     const queryClient = useQueryClient();
-    // Removed selectedDistributorId state
     const [purchaseItems, setPurchaseItems] = useState<PurchaseItem[]>([]);
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [quantity, setQuantity] = useState<number | ''>(''); // Allow empty string for placeholder
@@ -62,15 +58,13 @@ const PurchaseForm: React.FC = () => {
 
 
     // --- Data Fetching ---
-    // Removed distributor query
-
     const { data: products = [], isLoading: isLoadingProducts, error: errorProducts } = useQuery<Product[]>({
         queryKey: ['products'],
         queryFn: () => fetchProducts(db),
     });
 
-    const isLoading = isLoadingProducts; // Adjusted loading state
-    const error = errorProducts; // Adjusted error state
+    const isLoading = isLoadingProducts;
+    const error = errorProducts;
 
      // --- Product Search ---
      const productOptions = useMemo(() => {
@@ -95,22 +89,20 @@ const PurchaseForm: React.FC = () => {
      };
 
 
-     // --- Barcode Scanning ---
+     // --- Barcode Scanning (Adapted) ---
      const isBarcodeDetectorSupported = typeof window !== 'undefined' && 'BarcodeDetector' in window;
 
       useEffect(() => {
         let stream: MediaStream | null = null;
         let stopStream = () => {
              if (stream) {
-                console.log("Stopping camera stream.");
                 stream.getTracks().forEach(track => track.stop());
-                stream = null; // Ensure stream is marked as null
+                stream = null;
             }
             if (videoRef.current) {
                videoRef.current.srcObject = null;
             }
         }
-
         const getCameraPermission = async () => {
           if (!isScanning) {
             setHasCameraPermission(null);
@@ -122,18 +114,14 @@ const PurchaseForm: React.FC = () => {
             setHasCameraPermission(true);
             if (videoRef.current) {
                  videoRef.current.srcObject = stream;
-                 // Attempt to play the video stream
                  videoRef.current.play().catch(playError => {
-                    console.error("Error attempting to play video:", playError);
-                     // Handle error - perhaps permission issue or device busy
-                     setHasCameraPermission(false); // Revert permission state if play fails
+                     console.error("Error playing video:", playError);
+                     setHasCameraPermission(false);
                      toast({ variant: 'destructive', title: 'Error de Cámara', description: 'No se pudo iniciar la cámara.'});
-                     setIsScanning(false); // Stop scanning
+                     setIsScanning(false);
                  });
             } else {
-                 // Video ref not ready yet, this might cause issues
-                 console.warn("Video ref not available when setting stream");
-                 stopStream(); // Stop the stream if ref is not ready
+                 stopStream();
                  setIsScanning(false);
             }
           } catch (err) {
@@ -145,78 +133,59 @@ const PurchaseForm: React.FC = () => {
           }
         };
         getCameraPermission();
-        return stopStream; // Cleanup function returns the stopStream function
-      }, [isScanning, toast]); // Only run when isScanning changes
+        return stopStream;
+      }, [isScanning, toast]);
 
       useEffect(() => {
           if (!isScanning || !hasCameraPermission || !videoRef.current || !isBarcodeDetectorSupported) return;
 
           let animationFrameId: number;
-           let isDetectionRunning = true; // Flag to control the loop
-          const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['ean_13', 'upc_a', 'code_128', 'ean_8', 'itf', 'code_39', 'code_93'] }); // Added more formats
+           let isDetectionRunning = true;
+          const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['ean_13', 'upc_a', 'code_128', 'ean_8', 'itf', 'code_39', 'code_93'] });
 
           const detectBarcode = async () => {
-              // Check conditions inside the loop
-              if (!isDetectionRunning || !videoRef.current || !videoRef.current.srcObject || !isScanning) {
-                 console.log("Stopping detection loop.");
-                 return; // Exit loop if conditions are no longer met
-              }
-
-               // More robust check for video readiness
-               // Checks if video has metadata loaded and has dimensions > 0
+              if (!isDetectionRunning || !videoRef.current || !videoRef.current.srcObject || !isScanning) return;
                if (videoRef.current.readyState < videoRef.current.HAVE_METADATA || videoRef.current.videoWidth === 0) {
-                  console.log("Video not ready for detection, waiting...");
-                   if (isDetectionRunning) { // Check flag before requesting next frame
-                        animationFrameId = requestAnimationFrame(detectBarcode); // Retry detection
-                   }
-                  return;
+                   if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
+                   return;
                }
 
               try {
                 const barcodes = await barcodeDetector.detect(videoRef.current);
-                if (barcodes.length > 0 && barcodes[0].rawValue && isDetectionRunning) { // Check flag again before processing
+                if (barcodes.length > 0 && barcodes[0].rawValue && isDetectionRunning) {
                   const scannedId = barcodes[0].rawValue;
                   console.log("Barcode detected:", scannedId);
                   const product = products.find(p => p.id === scannedId);
-                   setIsScanning(false); // Stop scanning UI/state
-                   isDetectionRunning = false; // Stop the detection loop
+                   setIsScanning(false);
+                   isDetectionRunning = false;
 
                   if (product) {
                       setSelectedProduct(product);
                       setSearchText(`${product.name} (${product.id})`);
-                      setPurchasePrice(product.lastPurchasePrice?.toString() ?? ''); // Pre-fill last purchase price on scan
-                       setQuantity(''); // Reset quantity on scan
+                      setPurchasePrice(product.lastPurchasePrice?.toString() ?? '');
+                       setQuantity('');
                       toast({ title: "Código Detectado", description: `${product.name}` });
                   } else {
                        setBarcodeToAdd(scannedId);
                        setIsAddProductDialogOpen(true);
                        toast({ title: "Producto no encontrado", description: `Código: ${scannedId}. Agrega el nuevo producto.`, variant: "default", duration: 5000 });
                   }
-                } else if (isDetectionRunning) { // Continue only if running
+                } else if (isDetectionRunning) {
                   animationFrameId = requestAnimationFrame(detectBarcode);
                 }
               } catch (error) {
-                 // Avoid logging the common InvalidStateError unless needed for debugging
                  if (!(error instanceof DOMException && error.name === 'InvalidStateError')) {
                     console.error("Error detecting barcode:", error);
                  }
-                 // Continue scanning even if detection fails once, if still running
-                 if (isDetectionRunning) {
-                    animationFrameId = requestAnimationFrame(detectBarcode); // Try again
-                 }
+                 if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
               }
           };
-           if (isDetectionRunning) { // Start the loop only if needed
-               animationFrameId = requestAnimationFrame(detectBarcode);
-           }
-
-           // Cleanup function
+           if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
            return () => {
-               console.log("Cleaning up barcode detection effect.");
-               isDetectionRunning = false; // Signal loop to stop
-               cancelAnimationFrame(animationFrameId); // Cancel any pending frame
+               isDetectionRunning = false;
+               cancelAnimationFrame(animationFrameId);
            };
-       }, [isScanning, hasCameraPermission, products, toast, isBarcodeDetectorSupported]); // Re-check dependencies
+       }, [isScanning, hasCameraPermission, products, toast, isBarcodeDetectorSupported]);
 
 
        const toggleScan = () => {
@@ -225,19 +194,18 @@ const PurchaseForm: React.FC = () => {
              return;
          }
          setIsScanning(prev => !prev);
-         // Clear selection only when *starting* the scan or explicitly turning it off
-          if (!isScanning) { // If we are about to START scanning
+          if (!isScanning) {
               setSelectedProduct(null);
               setSearchText('');
               setPurchasePrice('');
-              setQuantity(''); // Reset quantity on scan start
+              setQuantity('');
           }
        };
 
     // --- Purchase Item Management ---
     const handleAddItem = () => {
-        const currentQuantity = Number(quantity); // Convert '' or number to number
-        if (!selectedProduct || !quantity || currentQuantity <= 0) { // Check if quantity is empty or <= 0
+        const currentQuantity = Number(quantity);
+        if (!selectedProduct || !quantity || currentQuantity <= 0) {
             toast({ title: 'Error', description: 'Selecciona un producto y una cantidad válida.', variant: 'destructive' });
             return;
         }
@@ -251,13 +219,12 @@ const PurchaseForm: React.FC = () => {
         let updatedItems;
 
         if (existingItem) {
-            // Update existing item's quantity and potentially price
             updatedItems = purchaseItems.map(item =>
                 item.productId === selectedProduct.id
                     ? {
                         ...item,
                         quantity: item.quantity + currentQuantity,
-                        purchasePrice: price, // Update price to the newly entered one
+                        purchasePrice: price,
                         totalCost: (item.quantity + currentQuantity) * price
                       }
                     : item
@@ -274,10 +241,9 @@ const PurchaseForm: React.FC = () => {
         }
 
         setPurchaseItems(updatedItems);
-        // Reset inputs
         setSelectedProduct(null);
         setSearchText('');
-        setQuantity(''); // Reset quantity to empty for placeholder
+        setQuantity('');
         setPurchasePrice('');
     };
 
@@ -292,7 +258,6 @@ const PurchaseForm: React.FC = () => {
 
     // --- Submit Purchase ---
     const handleSubmitPurchase = async () => {
-        // Removed distributor check
         if (purchaseItems.length === 0) {
             toast({ title: 'Error', description: 'Agrega al menos un producto a la compra.', variant: 'destructive' });
             return;
@@ -306,29 +271,26 @@ const PurchaseForm: React.FC = () => {
 
         try {
             const batch = writeBatch(db);
-            const timestamp = serverTimestamp(); // Use server timestamp for consistency
+            const timestamp = serverTimestamp();
 
             for (const item of purchaseItems) {
                 const productRef = doc(db, 'products', item.productId);
-                const productSnap = await getDoc(productRef); // Need to read current quantity
+                const productSnap = await getDoc(productRef);
 
                 if (!productSnap.exists()) {
                      console.warn(`Product ${item.productId} not found during purchase submission. Skipping update.`);
-                     continue; // Skip this item if product doc doesn't exist
+                     continue;
                 }
 
                 const currentQuantity = productSnap.data()?.quantity ?? 0;
                 const newQuantity = currentQuantity + item.quantity;
 
-                // Prepare product update - Update quantity, lastPurchasePrice and timestamp
                 batch.update(productRef, {
                     quantity: newQuantity,
-                    lastPurchasePrice: item.purchasePrice, // Update the last purchase price
-                    updatedAt: timestamp, // Update product timestamp
+                    lastPurchasePrice: item.purchasePrice,
+                    updatedAt: timestamp,
                 });
             }
-
-            // Removed optional purchase log for simplicity based on the request
 
             await batch.commit();
 
@@ -337,15 +299,13 @@ const PurchaseForm: React.FC = () => {
                 description: `Ingreso de mercadería por ${formatCurrency(purchaseTotal)} registrado. Stock actualizado.`,
             });
 
-            // Reset form state
-            // Removed distributor reset
             setPurchaseItems([]);
             setSelectedProduct(null);
             setSearchText('');
-            setQuantity(''); // Reset quantity
+            setQuantity('');
             setPurchasePrice('');
 
-            queryClient.invalidateQueries({ queryKey: ['products'] }); // Invalidate products cache
+            queryClient.invalidateQueries({ queryKey: ['products'] });
 
         } catch (error) {
             console.error("Error submitting purchase:", error);
@@ -361,19 +321,17 @@ const PurchaseForm: React.FC = () => {
 
      // --- Handler for when a new product is added via the dialog ---
      const handleProductAdded = useCallback((newProduct: Product) => {
-         // Invalidate product query to refetch in the background
          queryClient.invalidateQueries({ queryKey: ['products'] });
 
-         // Directly use the newly added product data to update the form state
          if (newProduct) {
             setSelectedProduct(newProduct);
-            setSearchText(`${newProduct.name} (${newProduct.id})`); // Set search text
-            setPurchasePrice(newProduct.lastPurchasePrice?.toString() ?? ''); // Set last purchase price if available
-            setQuantity(''); // Reset quantity
+            setSearchText(`${newProduct.name} (${newProduct.id})`);
+            setPurchasePrice(newProduct.lastPurchasePrice?.toString() ?? '');
+            setQuantity('');
          }
 
-         setBarcodeToAdd(null); // Clear the barcode to add state
-     }, [queryClient]); // Keep queryClient as dependency
+         setBarcodeToAdd(null);
+     }, [queryClient]);
 
 
     // --- Render Logic ---
@@ -382,18 +340,16 @@ const PurchaseForm: React.FC = () => {
 
     return (
         <div className="space-y-6">
-             {/* Distributor Selection Removed */}
-
              {/* Add Product Section */}
             <div className="border p-4 rounded-md space-y-4 bg-secondary/50">
                  <h3 className="text-lg font-medium mb-2">Agregar Producto Comprado</h3>
 
-                  {/* Scanner Section */}
+                  {/* Scanner View */}
                  {isScanning && (
                      <div className="relative mb-4">
-                         <video ref={videoRef} className={cn("w-full aspect-video rounded-md bg-muted", hasCameraPermission === false && "hidden")} autoPlay muted playsInline />
+                         <video ref={videoRef} className={cn("w-full max-w-sm mx-auto aspect-video rounded-md bg-muted", hasCameraPermission === false && "hidden")} autoPlay muted playsInline />
                          <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full pointer-events-none" />
-                         <div className="absolute top-1/2 left-0 w-full h-0.5 bg-red-500 animate-pulse" />
+                         <div className="absolute top-1/2 left-1/2 w-3/4 h-0.5 bg-red-500 animate-pulse -translate-x-1/2 -translate-y-1/2" /> {/* Centered Scan Line */}
                          {hasCameraPermission === null && !videoRef.current?.srcObject && (
                              <div className="absolute inset-0 flex items-center justify-center bg-muted rounded-md"><LoadingSpinner /><p className="ml-2 text-sm text-muted-foreground">Iniciando...</p></div>
                          )}
@@ -543,7 +499,6 @@ const PurchaseForm: React.FC = () => {
                             variant="outline"
                             onClick={() => {
                                 setPurchaseItems([]);
-                                // Removed distributor reset
                             }}
                             disabled={isSubmitting}
                         >
@@ -551,7 +506,7 @@ const PurchaseForm: React.FC = () => {
                         </Button>
                         <Button
                             onClick={handleSubmitPurchase}
-                            disabled={isSubmitting || purchaseItems.length === 0} // Removed distributor check
+                            disabled={isSubmitting || purchaseItems.length === 0}
                             size="lg"
                         >
                             {isSubmitting

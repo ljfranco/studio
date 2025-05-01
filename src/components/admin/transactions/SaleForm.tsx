@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -21,6 +22,7 @@ import type { UserData } from '@/types/user'; // Define or import UserData type
 import type { Transaction, SaleDetail } from '@/types/transaction';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 // Removed direct import of UserDetailView's recalculateBalance
+import AddEditProductDialog from '../inventory/AddEditProductDialog'; // Import AddEditProductDialog
 
 // Special ID for the generic customer - Changed from reserved name
 const CONSUMIDOR_FINAL_ID = 'consumidor-final-id'; // Changed ID
@@ -51,10 +53,8 @@ const fetchUsers = async (db: any): Promise<UserData[]> => {
             console.log("Created generic consumer document.");
         } catch (error) {
              console.error("Failed to create generic consumer document:", error);
-             // Proceed without the generic user if creation fails
         }
      }
-    // Add the generic user to the start regardless of creation result (it might exist already)
     users.unshift({ id: CONSUMIDOR_FINAL_ID, name: CONSUMIDOR_FINAL_NAME, email: '', balance: 0, isEnabled: true, role: 'user', isGeneric: true });
 
 
@@ -91,6 +91,8 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [searchText, setSearchText] = useState(''); // For product search
+    const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false); // Add state for Add Product dialog
+    const [barcodeToAdd, setBarcodeToAdd] = useState<string | null>(null); // Add state to hold scanned barcode for new product
 
     const isEditMode = !!saleToEdit;
     const isCustomerSelected = !!selectedUserId; // Check if a customer is selected
@@ -100,23 +102,21 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
         if (isEditMode && saleToEdit) {
             console.log("Populating form for editing sale:", saleToEdit.id);
             setSelectedUserId(saleToEdit.userId);
-            setSaleItems(saleToEdit.saleDetails || []); // Pre-fill items
-            // Do not reset product selection or quantity here, user might want to add more
+            setSaleItems(saleToEdit.saleDetails || []);
         } else {
-            // Reset for new sale mode
              setSelectedUserId('');
              setSaleItems([]);
              setSelectedProduct(null);
              setSearchText('');
-             setQuantity(''); // Reset quantity
+             setQuantity('');
         }
-    }, [isEditMode, saleToEdit]); // Depend on edit mode and the sale data
+    }, [isEditMode, saleToEdit]);
 
     // --- Data Fetching ---
     const { data: users = [], isLoading: isLoadingUsers, error: errorUsers } = useQuery<UserData[]>({
-        queryKey: ['saleUsers'], // Distinct query key
-        queryFn: () => fetchUsers(db), // Use queryFn instead of fn
-        staleTime: 1000 * 60 * 5, // Cache users for 5 minutes
+        queryKey: ['saleUsers'],
+        queryFn: () => fetchUsers(db),
+        staleTime: 1000 * 60 * 5,
     });
 
     const { data: products = [], isLoading: isLoadingProducts, error: errorProducts } = useQuery<Product[]>({
@@ -143,75 +143,108 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
      const handleProductSelect = (barcode: string) => {
         const product = products.find(p => p.id === barcode);
         setSelectedProduct(product || null);
-        setSearchText(product ? `${product.name} (${product.id})` : ''); // Update search text display
-        setQuantity(''); // Reset quantity when selecting a new product
+        setSearchText(product ? `${product.name} (${product.id})` : '');
+        setQuantity('');
      };
 
 
-     // --- Barcode Scanning (adapted from AddEditProductDialog) ---
+     // --- Barcode Scanning ---
      const isBarcodeDetectorSupported = typeof window !== 'undefined' && 'BarcodeDetector' in window;
 
       useEffect(() => {
         let stream: MediaStream | null = null;
+        let stopStream = () => {
+             if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            if (videoRef.current) {
+               videoRef.current.srcObject = null;
+            }
+        }
         const getCameraPermission = async () => {
           if (!isScanning) {
             setHasCameraPermission(null);
-            if (videoRef.current && videoRef.current.srcObject) {
-                (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
-                videoRef.current.srcObject = null;
-              }
+            stopStream();
             return;
           }
           try {
             stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
             setHasCameraPermission(true);
-            if (videoRef.current) videoRef.current.srcObject = stream;
+            if (videoRef.current) {
+                 videoRef.current.srcObject = stream;
+                 videoRef.current.play().catch(playError => {
+                     console.error("Error playing video:", playError);
+                     setHasCameraPermission(false);
+                     toast({ variant: 'destructive', title: 'Error de Cámara', description: 'No se pudo iniciar la cámara.'});
+                     setIsScanning(false);
+                 });
+            } else {
+                 stopStream();
+                 setIsScanning(false);
+            }
           } catch (err) {
             console.error('Error accessing camera:', err);
             setHasCameraPermission(false);
             toast({ variant: 'destructive', title: 'Acceso a Cámara Denegado' });
             setIsScanning(false);
+            stopStream();
           }
         };
         getCameraPermission();
-        return () => stream?.getTracks().forEach(track => track.stop());
+        return stopStream;
       }, [isScanning, toast]);
 
       useEffect(() => {
           if (!isScanning || !hasCameraPermission || !videoRef.current || !isBarcodeDetectorSupported) return;
 
           let animationFrameId: number;
-          const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['ean_13', 'upc_a', 'code_128'] });
+          let isDetectionRunning = true;
+          const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['ean_13', 'upc_a', 'code_128', 'ean_8', 'itf', 'code_39', 'code_93'] });
 
           const detectBarcode = async () => {
-              if (!videoRef.current || !videoRef.current.srcObject || !isScanning) return;
+              if (!isDetectionRunning || !videoRef.current || !videoRef.current.srcObject || !isScanning) return;
+               if (videoRef.current.readyState < videoRef.current.HAVE_METADATA || videoRef.current.videoWidth === 0) {
+                   if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
+                   return;
+               }
               try {
                 const barcodes = await barcodeDetector.detect(videoRef.current);
-                if (barcodes.length > 0 && barcodes[0].rawValue) {
+                if (barcodes.length > 0 && barcodes[0].rawValue && isDetectionRunning) {
                   const scannedId = barcodes[0].rawValue;
+                  console.log("Barcode detected:", scannedId);
                   const product = products.find(p => p.id === scannedId);
+                  setIsScanning(false);
+                  isDetectionRunning = false;
+
                   if (product) {
                       setSelectedProduct(product);
-                       setSearchText(`${product.name} (${product.id})`); // Update search text
-                       setQuantity(''); // Reset quantity on scan
+                       setSearchText(`${product.name} (${product.id})`);
+                       setQuantity('');
                       toast({ title: "Código Detectado", description: `${product.name}` });
-                      setIsScanning(false); // Stop scanning after successful detection
                   } else {
-                      toast({ title: "Código no encontrado", description: scannedId, variant: "destructive" });
-                      // Keep scanning
-                      animationFrameId = requestAnimationFrame(detectBarcode);
+                       // If product not found, open Add Product dialog
+                       setBarcodeToAdd(scannedId);
+                       setIsAddProductDialogOpen(true);
+                       toast({ title: "Producto no encontrado", description: `Código: ${scannedId}. Agrega el nuevo producto.`, variant: "default", duration: 5000 });
                   }
-                } else {
+                } else if (isDetectionRunning) {
                   animationFrameId = requestAnimationFrame(detectBarcode);
                 }
               } catch (error) {
-                console.error("Error detecting barcode:", error);
-                animationFrameId = requestAnimationFrame(detectBarcode);
+                 if (!(error instanceof DOMException && error.name === 'InvalidStateError')) {
+                    console.error("Error detecting barcode:", error);
+                 }
+                 if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
               }
           };
-          animationFrameId = requestAnimationFrame(detectBarcode);
-          return () => cancelAnimationFrame(animationFrameId);
+           if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
+           return () => {
+               isDetectionRunning = false;
+               cancelAnimationFrame(animationFrameId);
+           };
        }, [isScanning, hasCameraPermission, products, toast, isBarcodeDetectorSupported]);
+
 
        const toggleScan = () => {
          if (!isBarcodeDetectorSupported) {
@@ -219,22 +252,22 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
              return;
          }
          setIsScanning(prev => !prev);
-         if (!isScanning) { // Clear selection only when STARTING the scan
+         if (!isScanning) {
               setSelectedProduct(null);
               setSearchText('');
-              setQuantity(''); // Reset quantity
+              setQuantity('');
           }
        };
 
 
     // --- Sale Item Management ---
     const handleAddItem = () => {
-        const currentQuantity = Number(quantity); // Convert '' or number to number
-        if (!selectedProduct || !quantity || currentQuantity <= 0) { // Check if quantity is empty or <= 0
+        const currentQuantity = Number(quantity);
+        if (!selectedProduct || !quantity || currentQuantity <= 0) {
             toast({ title: 'Error', description: 'Selecciona un producto y una cantidad válida.', variant: 'destructive' });
             return;
         }
-        if (!isCustomerSelected) { // Double-check customer selection
+        if (!isCustomerSelected) {
              toast({ title: 'Error', description: 'Debes seleccionar un cliente primero.', variant: 'destructive' });
              return;
         }
@@ -248,7 +281,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                 title: 'Stock Insuficiente',
                 description: `Stock total: ${currentStock}. En carrito: ${currentQuantityInCart}. Intentas agregar: ${currentQuantity}.`,
                 variant: 'destructive',
-                duration: 5000 // Longer duration for stock errors
+                duration: 5000
             });
             return;
         }
@@ -274,10 +307,9 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
         }
 
         setSaleItems(updatedItems);
-        // Reset inputs
         setSelectedProduct(null);
-        setSearchText(''); // Clear search text
-        setQuantity(''); // Reset quantity to empty for placeholder
+        setSearchText('');
+        setQuantity('');
     };
 
     const handleRemoveItem = (productId: string) => {
@@ -289,7 +321,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
     }, [saleItems]);
 
 
-    // --- Submit Sale (Handles both Add and Edit) ---
+    // --- Submit Sale ---
     const handleSubmitSale = async () => {
         if (!selectedUserId) {
             toast({ title: 'Error', description: 'Selecciona un cliente.', variant: 'destructive' });
@@ -311,9 +343,8 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                 const timestamp = Timestamp.now();
                 const originalSaleId = isEditMode ? saleToEdit?.id : null;
                 let originalSaleDetails: SaleDetail[] = [];
-                let originalSaleRef: any = null; // Define outside if
+                let originalSaleRef: any = null;
 
-                // --- Step 1: Read Original Sale (if editing) ---
                 if (isEditMode && originalSaleId) {
                     originalSaleRef = doc(db, 'transactions', originalSaleId);
                     const originalSaleSnap = await transaction.get(originalSaleRef);
@@ -324,7 +355,6 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                     originalSaleDetails = originalSaleData.saleDetails || [];
                 }
 
-                // --- Step 2: Read All Necessary Products ---
                 const allProductIds = new Set([
                     ...originalSaleDetails.map(item => item.productId),
                     ...saleItems.map(item => item.productId)
@@ -338,19 +368,16 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                     productDataMap.set(productId, {
                         exists: docSnap.exists(),
                         data: docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as Product : null,
-                        ref: productRefs[index] // Store the ref for writing later
+                        ref: productRefs[index]
                     });
                 });
 
-                // --- Step 3: Calculate Final Stock Adjustments & Validate ---
-                const stockAdjustments = new Map<string, number>(); // productId -> quantity change
+                const stockAdjustments = new Map<string, number>();
 
-                // Restore stock from original sale
                 originalSaleDetails.forEach(item => {
                     stockAdjustments.set(item.productId, (stockAdjustments.get(item.productId) || 0) + item.quantity);
                 });
 
-                // Deduct stock for new sale & Validate
                 for (const item of saleItems) {
                     const currentAdjustment = stockAdjustments.get(item.productId) || 0;
                     stockAdjustments.set(item.productId, currentAdjustment - item.quantity);
@@ -367,9 +394,6 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                     }
                 }
 
-                // --- Step 4: Perform Writes ---
-
-                // 4a. Cancel Original Sale (if editing)
                 if (isEditMode && originalSaleRef) {
                     transaction.update(originalSaleRef, {
                         isCancelled: true,
@@ -380,7 +404,6 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                     });
                 }
 
-                // 4b. Create New Sale Transaction
                 const newSaleTransactionRef = doc(collection(db, 'transactions'));
                 transaction.set(newSaleTransactionRef, {
                     userId: selectedUserId,
@@ -398,26 +421,21 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                     saleDetails: saleItems,
                 });
 
-                // 4c. Apply Stock Updates
                 for (const [productId, quantityChange] of stockAdjustments.entries()) {
                     if (quantityChange !== 0) {
                         const productInfo = productDataMap.get(productId);
-                        if (productInfo) { // Check if product info exists
+                        if (productInfo) {
                             const currentQuantity = productInfo.data?.quantity ?? 0;
                             const newQuantity = currentQuantity + quantityChange;
                             console.log(`Product ${productId}: Current ${currentQuantity}, Change ${quantityChange}, New ${newQuantity}`);
                             transaction.update(productInfo.ref, { quantity: newQuantity });
                         } else {
-                            // This case should ideally not happen due to earlier checks, but log if it does
                             console.warn(`Product info not found for ${productId} during stock update write.`);
                         }
                     }
                 }
-
-                // Balance update is handled by the callback triggering recalculation
             });
 
-            // Call success callback *after* the transaction commits
             onSuccessCallback?.();
 
             toast({
@@ -425,13 +443,12 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                 description: `Venta por ${formatCurrency(saleTotal)} registrada para ${users.find(u => u.id === selectedUserId)?.name}.`,
             });
 
-            // Reset form state only if NOT editing, or if explicitly closed
             if (!isEditMode) {
                 setSelectedUserId('');
                 setSaleItems([]);
                 setSelectedProduct(null);
                 setSearchText('');
-                setQuantity(''); // Reset quantity
+                setQuantity('');
             }
 
             queryClient.invalidateQueries({ queryKey: ['products'] });
@@ -440,7 +457,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
             queryClient.invalidateQueries({ queryKey: ['saleUsers'] });
 
             if (isEditMode && onClose) {
-                 onClose(); // Close the modal/dialog after successful edit
+                 onClose();
             }
 
         } catch (error) {
@@ -455,13 +472,27 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
         }
     };
 
+     // --- Handler for when a new product is added via the dialog ---
+     const handleProductAdded = useCallback((newProduct: Product) => {
+         // Refetch products to include the new one in the list immediately
+         queryClient.refetchQueries({ queryKey: ['products'] });
+
+         // Automatically select the newly added product
+         if (newProduct) {
+            setSelectedProduct(newProduct);
+            setSearchText(`${newProduct.name} (${newProduct.id})`);
+            setQuantity(''); // Reset quantity
+         }
+
+         setBarcodeToAdd(null); // Clear the barcode to add state
+     }, [queryClient]); // Dependencies
+
 
     // --- Render Logic ---
-    if (error) return <p className="text-center text-destructive">Error al cargar datos: {error instanceof Error ? error.message : 'Error desconocido'}</p>; // Check if error is Error instance
+    if (error) return <p className="text-center text-destructive">Error al cargar datos: {error instanceof Error ? error.message : 'Error desconocido'}</p>;
     if (isLoading) return <div className="flex justify-center p-4"><LoadingSpinner /></div>;
 
     return (
-        // Wrap the form content in a div that can scroll if needed
         <div className="space-y-6 overflow-y-auto">
              {/* Customer Selection */}
              <div>
@@ -469,7 +500,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                 <Select
                     value={selectedUserId}
                     onValueChange={setSelectedUserId}
-                    disabled={isSubmitting || isEditMode || saleItems.length > 0} // Disable if editing or items added
+                    disabled={isSubmitting || isEditMode || saleItems.length > 0}
                 >
                     <SelectTrigger id="customer-select">
                         <SelectValue placeholder="Selecciona un cliente..." />
@@ -486,10 +517,10 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                 {!isEditMode && saleItems.length > 0 && <p className="text-xs text-muted-foreground mt-1">Cliente bloqueado hasta finalizar o cancelar la venta actual.</p>}
              </div>
 
-             {/* Add Product Section - Disable if no customer selected */}
+             {/* Add Product Section */}
             <div className={cn(
                  "border p-4 rounded-md space-y-4 bg-secondary/50 transition-opacity",
-                 !isCustomerSelected && "opacity-50 pointer-events-none" // Apply disabled styles
+                 !isCustomerSelected && "opacity-50 pointer-events-none"
                 )}>
                  <h3 className="text-lg font-medium mb-2">Agregar Producto</h3>
                  {!isCustomerSelected && (
@@ -499,12 +530,12 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                      </div>
                  )}
 
-                  {/* Scanner Section */}
+                  {/* Scanner View */}
                  {isScanning && (
                      <div className="relative mb-4">
-                         <video ref={videoRef} className={cn("w-full aspect-video rounded-md bg-muted", hasCameraPermission === false && "hidden")} autoPlay muted playsInline />
+                         <video ref={videoRef} className={cn("w-full max-w-sm mx-auto aspect-video rounded-md bg-muted", hasCameraPermission === false && "hidden")} autoPlay muted playsInline />
                          <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full pointer-events-none" />
-                         <div className="absolute top-1/2 left-0 w-full h-0.5 bg-red-500 animate-pulse" />
+                         <div className="absolute top-1/2 left-1/2 w-3/4 h-0.5 bg-red-500 animate-pulse -translate-x-1/2 -translate-y-1/2" /> {/* Centered Scan Line */}
                          {hasCameraPermission === null && !videoRef.current?.srcObject && (
                              <div className="absolute inset-0 flex items-center justify-center bg-muted rounded-md"><LoadingSpinner /><p className="ml-2 text-sm text-muted-foreground">Iniciando...</p></div>
                          )}
@@ -528,17 +559,16 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                                 notFoundMessage="Producto no encontrado."
                                 searchText={searchText}
                                 setSearchText={setSearchText}
-                                disabled={isScanning || isSubmitting || !isCustomerSelected} // Disable if no customer
+                                disabled={isScanning || isSubmitting || !isCustomerSelected}
                                 triggerId="product-search"
                               />
-
-                            <Button
+                             <Button
                                 type="button"
                                 variant="outline"
                                 size="icon"
                                 onClick={toggleScan}
                                 title={isScanning ? "Detener Escáner" : "Escanear Código"}
-                                disabled={isSubmitting || !isBarcodeDetectorSupported || !isCustomerSelected} // Disable if no customer
+                                disabled={isSubmitting || !isBarcodeDetectorSupported || !isCustomerSelected}
                                 className={cn("shrink-0", isScanning && "bg-destructive hover:bg-destructive/90 text-destructive-foreground")}
                             >
                                 <ScanLine className="h-5 w-5" />
@@ -547,9 +577,19 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                           {!isBarcodeDetectorSupported && (
                             <p className="text-xs text-destructive mt-1">Escáner no compatible.</p>
                         )}
+                        {/* Button to add new product if not found */}
+                         {searchText && !selectedProduct && filteredProductOptions.length === 0 && !isLoadingProducts && !isScanning && (
+                            <Button
+                                type="button"
+                                variant="link"
+                                className="text-xs h-auto p-0 mt-1"
+                                onClick={() => setIsAddProductDialogOpen(true)}
+                            >
+                                ¿Producto no encontrado? Agrégalo aquí.
+                            </Button>
+                          )}
                     </div>
 
-                     {/* Quantity Input */}
                     <div className="w-full sm:w-auto">
                         <Label htmlFor="quantity">Cantidad</Label>
                         <Input
@@ -557,19 +597,18 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                             type="number"
                             min="1"
                             step="1"
-                            placeholder="Cant." // Use placeholder
+                            placeholder="Cant."
                             value={quantity}
-                            onChange={(e) => setQuantity(e.target.value === '' ? '' : parseInt(e.target.value, 10) || '')} // Allow empty string
+                            onChange={(e) => setQuantity(e.target.value === '' ? '' : parseInt(e.target.value, 10) || '')}
                             className="w-full sm:w-20 text-center"
-                            disabled={!selectedProduct || isSubmitting || !isCustomerSelected} // Disable if no customer
+                            disabled={!selectedProduct || isSubmitting || !isCustomerSelected}
                         />
                     </div>
 
-                     {/* Add Item Button */}
                      <Button
                         type="button"
                         onClick={handleAddItem}
-                        disabled={!selectedProduct || !quantity || quantity <= 0 || isSubmitting || !isCustomerSelected} // Disable if no customer, update disabled check
+                        disabled={!selectedProduct || !quantity || quantity <= 0 || isSubmitting || !isCustomerSelected}
                         className="w-full sm:w-auto"
                      >
                         <PlusCircle className="mr-2 h-4 w-4" /> Agregar
@@ -585,7 +624,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
 
              {/* Sale Items List */}
              {saleItems.length > 0 && (
-                <div className="border rounded-md overflow-x-auto"> {/* Make table scrollable horizontally if needed */}
+                <div className="border rounded-md overflow-x-auto">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -621,25 +660,23 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                 </div>
              )}
 
-             {/* Total and Submit - Keep this outside the scrollable area for visibility */}
+             {/* Total and Submit */}
              {saleItems.length > 0 && (
-                <div className="flex flex-col items-end space-y-4 mt-4 sticky bottom-0 bg-background py-4 px-6 border-t"> {/* Make footer sticky */}
+                <div className="flex flex-col items-end space-y-4 mt-4 sticky bottom-0 bg-background py-4 px-6 border-t">
                     <p className="text-xl font-bold">Total Venta: {formatCurrency(saleTotal)}</p>
                     <div className='flex gap-2'>
-                        {/* Only show Cancel Sale button in "new sale" mode */}
                          {!isEditMode && (
                             <Button
                                 variant="outline"
                                 onClick={() => {
-                                    setSaleItems([]); // Clear sale items
-                                    setSelectedUserId(''); // Reset customer selection
+                                    setSaleItems([]);
+                                    setSelectedUserId('');
                                 }}
                                 disabled={isSubmitting}
                             >
                                 Cancelar Venta Actual
                             </Button>
                          )}
-                          {/* Close button for edit mode */}
                           {isEditMode && onClose && (
                             <Button
                                 variant="outline"
@@ -662,6 +699,18 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                     </div>
                 </div>
              )}
+
+             {/* Add Product Dialog - Triggered when barcode not found or button clicked */}
+              <AddEditProductDialog
+                isOpen={isAddProductDialogOpen}
+                onClose={() => {
+                    setIsAddProductDialogOpen(false);
+                    setBarcodeToAdd(null); // Clear barcode when closing
+                }}
+                product={barcodeToAdd ? { id: barcodeToAdd } : null} // Pass barcode if scanned, otherwise null
+                onSuccessCallback={handleProductAdded}
+                isMinimalAdd={true} // Always use minimal add when triggered from here
+            />
         </div>
     );
 };
