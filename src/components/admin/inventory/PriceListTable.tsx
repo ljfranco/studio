@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -45,7 +44,9 @@ declare module 'jspdf' {
 const fetchProducts = async (db: any): Promise<Product[]> => {
   const productsCol = collection(db, 'products');
   const snapshot = await getDocs(productsCol);
-  return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Product));
+  return snapshot.docs
+    .map(doc => ({ ...doc.data(), id: doc.id } as Product))
+    .sort((a, b) => a.name.localeCompare(b.name)); // Sort alphabetically by name
 };
 
 // Fetch distributors function
