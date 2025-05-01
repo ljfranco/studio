@@ -19,6 +19,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ALL_FUNCTIONALITIES } from '@/lib/functionalities'; // Import functionalities list
 import { ThemeToggle } from './ThemeToggle'; // Import ThemeToggle
+import { cn } from '@/lib/utils'; // Import cn for conditional classes
 
 // Helper to get initials from name
 const getInitials = (name?: string | null): string => {
@@ -82,7 +83,10 @@ export const Navbar: React.FC = () => {
                             <Button variant="ghost" className="relative h-9 w-9 rounded-full">
                                 <Avatar className="h-9 w-9">
                                 {/* <AvatarImage src={user.photoURL || undefined} alt={user.displayName || 'User'} /> */}
-                                <AvatarFallback>{getInitials(user.displayName)}</AvatarFallback>
+                                {/* Apply background and text color classes */}
+                                <AvatarFallback className="bg-primary text-primary-foreground">
+                                    {getInitials(user.displayName)}
+                                </AvatarFallback>
                                 </Avatar>
                             </Button>
                         </DropdownMenuTrigger>
