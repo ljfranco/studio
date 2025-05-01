@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -15,7 +14,7 @@ import { Combobox } from '@/components/ui/combobox'; // Assuming Combobox compon
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency, cn } from '@/lib/utils';
-import { PlusCircle, ScanLine, Trash2, Camera, Ban, Pencil } from 'lucide-react'; // Added Pencil
+import { PlusCircle, ScanLine, Trash2, Camera, Ban, Pencil, AlertCircle } from 'lucide-react'; // Added AlertCircle
 import type { User as AuthUser } from 'firebase/auth';
 import type { Product } from '@/types/product';
 import type { UserData } from '@/types/user'; // Define or import UserData type
@@ -94,6 +93,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
     const [searchText, setSearchText] = useState(''); // For product search
 
     const isEditMode = !!saleToEdit;
+    const isCustomerSelected = !!selectedUserId; // Check if a customer is selected
 
     // --- Initialize form state for editing ---
     useEffect(() => {
@@ -115,7 +115,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
     // --- Data Fetching ---
     const { data: users = [], isLoading: isLoadingUsers, error: errorUsers } = useQuery<UserData[]>({
         queryKey: ['saleUsers'], // Distinct query key
-        queryFn: () => fetchUsers(db),
+        fn: () => fetchUsers(db),
         staleTime: 1000 * 60 * 5, // Cache users for 5 minutes
     });
 
@@ -217,7 +217,10 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
              return;
          }
          setIsScanning(prev => !prev);
-         if (isScanning) setSelectedProduct(null); // Clear selection when stopping scan
+         if (!isScanning) { // Clear selection only when STARTING the scan
+              setSelectedProduct(null);
+              setSearchText('');
+          }
        };
 
 
@@ -226,6 +229,10 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
         if (!selectedProduct || quantity <= 0) {
             toast({ title: 'Error', description: 'Selecciona un producto y una cantidad válida.', variant: 'destructive' });
             return;
+        }
+        if (!isCustomerSelected) { // Double-check customer selection
+             toast({ title: 'Error', description: 'Debes seleccionar un cliente primero.', variant: 'destructive' });
+             return;
         }
 
         const currentStock = selectedProduct.quantity ?? 0;
@@ -475,9 +482,18 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                 {!isEditMode && saleItems.length > 0 && <p className="text-xs text-muted-foreground mt-1">Cliente bloqueado hasta finalizar o cancelar la venta actual.</p>}
              </div>
 
-             {/* Add Product Section */}
-            <div className="border p-4 rounded-md space-y-4 bg-secondary/50">
+             {/* Add Product Section - Disable if no customer selected */}
+            <div className={cn(
+                 "border p-4 rounded-md space-y-4 bg-secondary/50 transition-opacity",
+                 !isCustomerSelected && "opacity-50 pointer-events-none" // Apply disabled styles
+                )}>
                  <h3 className="text-lg font-medium mb-2">Agregar Producto</h3>
+                 {!isCustomerSelected && (
+                     <div className="flex items-center text-sm text-orange-600 bg-orange-100 p-2 rounded-md border border-orange-300">
+                         <AlertCircle className="h-4 w-4 mr-2 shrink-0" />
+                         <span>Selecciona un cliente para agregar productos.</span>
+                     </div>
+                 )}
 
                   {/* Scanner Section */}
                  {isScanning && (
@@ -508,7 +524,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                                 notFoundMessage="Producto no encontrado."
                                 searchText={searchText}
                                 setSearchText={setSearchText}
-                                disabled={isScanning || isSubmitting}
+                                disabled={isScanning || isSubmitting || !isCustomerSelected} // Disable if no customer
                                 triggerId="product-search"
                               />
 
@@ -518,7 +534,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                                 size="icon"
                                 onClick={toggleScan}
                                 title={isScanning ? "Detener Escáner" : "Escanear Código"}
-                                disabled={isSubmitting || !isBarcodeDetectorSupported}
+                                disabled={isSubmitting || !isBarcodeDetectorSupported || !isCustomerSelected} // Disable if no customer
                                 className={cn("shrink-0", isScanning && "bg-destructive hover:bg-destructive/90 text-destructive-foreground")}
                             >
                                 <ScanLine className="h-5 w-5" />
@@ -540,7 +556,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                             value={quantity}
                             onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 1)}
                             className="w-full sm:w-20 text-center"
-                            disabled={!selectedProduct || isSubmitting}
+                            disabled={!selectedProduct || isSubmitting || !isCustomerSelected} // Disable if no customer
                         />
                     </div>
 
@@ -548,7 +564,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                      <Button
                         type="button"
                         onClick={handleAddItem}
-                        disabled={!selectedProduct || quantity <= 0 || isSubmitting}
+                        disabled={!selectedProduct || quantity <= 0 || isSubmitting || !isCustomerSelected} // Disable if no customer
                         className="w-full sm:w-auto"
                      >
                         <PlusCircle className="mr-2 h-4 w-4" /> Agregar
