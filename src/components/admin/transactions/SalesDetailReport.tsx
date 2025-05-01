@@ -7,7 +7,7 @@ import { useFirebase } from '@/context/FirebaseContext';
 import { collection, query, where, orderBy, onSnapshot, Timestamp, getDocs } from 'firebase/firestore';
 import { format, startOfDay, endOfDay, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { DateRange } from "react-day-picker";
+import type { DateRange } from "react-day-picker"; // Keep DateRange type
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { formatCurrency, cn } from '@/lib/utils';
@@ -41,10 +41,14 @@ const SalesDetailReport: React.FC = () => {
     const [userNames, setUserNames] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [dateRange, setDateRange] = useState<DateRange | undefined>({
-        from: startOfDay(new Date()),
-        to: endOfDay(new Date()),
-    });
+
+    // Use state for individual from and to dates
+    const [fromDate, setFromDate] = useState<Date | undefined>(startOfDay(new Date()));
+    const [toDate, setToDate] = useState<Date | undefined>(endOfDay(new Date()));
+
+    // Derive dateRange for useEffect dependency
+    const dateRange = useMemo(() => ({ from: fromDate, to: toDate }), [fromDate, toDate]);
+
 
     useEffect(() => {
         if (!adminUser || role !== 'admin') {
@@ -53,11 +57,12 @@ const SalesDetailReport: React.FC = () => {
             return;
         }
 
-        // Do not fetch if date range is incomplete
+        // Fetch only if both dates are selected
         if (!dateRange || !dateRange.from || !dateRange.to) {
              setSales([]);
              setUserNames({});
              setLoading(false); // Stop loading if no valid range
+             setError("Por favor, selecciona un rango de fechas válido.");
              return;
         }
 
@@ -66,6 +71,16 @@ const SalesDetailReport: React.FC = () => {
 
         const startDate = startOfDay(dateRange.from);
         const endDate = endOfDay(dateRange.to);
+
+        // Ensure startDate is not after endDate
+        if (startDate > endDate) {
+            setError("La fecha 'Desde' no puede ser posterior a la fecha 'Hasta'.");
+            setLoading(false);
+            setSales([]);
+            setUserNames({});
+            return;
+        }
+
 
         const transactionsColRef = collection(db, 'transactions');
         const q = query(
@@ -162,16 +177,6 @@ const SalesDetailReport: React.FC = () => {
         };
     }, [sales, userNames]);
 
-     const renderSelectedDate = () => {
-        if (dateRange?.from) {
-          if (dateRange.to && dateRange.from !== dateRange.to) {
-            return `${format(dateRange.from, "dd/MM/yy", { locale: es })} - ${format(dateRange.to, "dd/MM/yy", { locale: es })}`;
-          }
-          return format(dateRange.from, "dd/MM/yyyy", { locale: es });
-        }
-        return "Selecciona un rango";
-      };
-
 
     if (!adminUser || role !== 'admin') {
         return <p className="text-center text-destructive">Acceso denegado.</p>;
@@ -180,34 +185,66 @@ const SalesDetailReport: React.FC = () => {
     return (
         <div className="space-y-6">
              {/* Date Range Picker */}
-             <div className="flex items-center gap-4 mb-6">
-                <Label htmlFor="date" className="shrink-0">Rango de Fechas:</Label>
-                <Popover>
-                    <PopoverTrigger asChild>
-                    <Button
-                        id="date"
-                        variant={"outline"}
-                        className={cn(
-                        "w-[260px] justify-start text-left font-normal",
-                        !dateRange && "text-muted-foreground"
-                        )}
-                    >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {renderSelectedDate()}
-                    </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                        initialFocus
-                        mode="range"
-                        defaultMonth={dateRange?.from}
-                        selected={dateRange}
-                        onSelect={setDateRange}
-                        numberOfMonths={2}
-                        locale={es}
-                    />
-                    </PopoverContent>
-                </Popover>
+             <div className="flex flex-wrap items-end gap-4 mb-6">
+                {/* From Date */}
+                <div className="flex flex-col gap-1">
+                    <Label htmlFor="from-date">Desde</Label>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                        <Button
+                            id="from-date"
+                            variant={"outline"}
+                            className={cn(
+                            "w-[150px] justify-start text-left font-normal", // Adjusted width
+                            !fromDate && "text-muted-foreground"
+                            )}
+                        >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {fromDate ? format(fromDate, "dd/MM/yyyy", {locale: es}) : <span>Selecciona</span>}
+                        </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                            mode="single"
+                            selected={fromDate}
+                            onSelect={setFromDate}
+                            initialFocus
+                            locale={es}
+                        />
+                        </PopoverContent>
+                    </Popover>
+                 </div>
+
+                 {/* To Date */}
+                 <div className="flex flex-col gap-1">
+                    <Label htmlFor="to-date">Hasta</Label>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                        <Button
+                            id="to-date"
+                            variant={"outline"}
+                            className={cn(
+                            "w-[150px] justify-start text-left font-normal", // Adjusted width
+                            !toDate && "text-muted-foreground"
+                            )}
+                        >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {toDate ? format(toDate, "dd/MM/yyyy", {locale: es}) : <span>Selecciona</span>}
+                        </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                            mode="single"
+                            selected={toDate}
+                            onSelect={setToDate}
+                            initialFocus
+                            locale={es}
+                            // Optionally disable dates before fromDate
+                            disabled={fromDate ? { before: fromDate } : undefined}
+                        />
+                        </PopoverContent>
+                    </Popover>
+                 </div>
              </div>
 
              {/* Loading and Error States */}
