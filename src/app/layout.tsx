@@ -3,9 +3,10 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { FirebaseProvider } from '@/context/FirebaseContext';
-import ReactQueryProvider from '@/context/ReactQueryProvider'; // Renamed for clarity
-import AuthProvider from '@/context/AuthContext'; // Added AuthProvider
-import { Navbar } from '@/components/layout/Navbar'; // Import Navbar
+import ReactQueryProvider from '@/context/ReactQueryProvider';
+import AuthProvider from '@/context/AuthContext';
+import { Navbar } from '@/components/layout/Navbar';
+import { ThemeProvider } from '@/components/layout/ThemeProvider'; // Import ThemeProvider
 
 // Initialize the Inter font
 const inter = Inter({
@@ -24,22 +25,32 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es">
+    // Remove lang="es" for now to avoid hydration mismatch warnings if ThemeProvider adds classes server-side initially
+    // It can be added back if needed, ensuring consistency between server and client render
+    <html>
       {/* Apply the font variable to the body */}
       <body className={`${inter.variable} antialiased`}>
-        <ReactQueryProvider>
-          <FirebaseProvider>
-            <AuthProvider> {/* Wrap with AuthProvider */}
-              <div className="flex flex-col min-h-screen">
-                <Navbar />
-                <main className="flex-grow container mx-auto px-4 py-8">
-                  {children}
-                </main>
-                <Toaster />
-              </div>
-            </AuthProvider>
-          </FirebaseProvider>
-        </ReactQueryProvider>
+         {/* Wrap everything with ThemeProvider */}
+        <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <ReactQueryProvider>
+            <FirebaseProvider>
+                <AuthProvider> {/* Wrap with AuthProvider */}
+                <div className="flex flex-col min-h-screen">
+                    <Navbar />
+                    <main className="flex-grow container mx-auto px-4 py-8">
+                    {children}
+                    </main>
+                    <Toaster />
+                </div>
+                </AuthProvider>
+            </FirebaseProvider>
+            </ReactQueryProvider>
+         </ThemeProvider>
       </body>
     </html>
   );
