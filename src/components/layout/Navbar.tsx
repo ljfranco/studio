@@ -6,8 +6,8 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { useFirebase } from '@/context/FirebaseContext';
 import { Button } from '@/components/ui/button';
-import { LogOut, User, ShieldCheck, Home, Settings } from 'lucide-react'; // Added icons
-import { useRouter } from 'next/navigation'; // Import useRouter
+import { LogOut, User, ShieldCheck, Settings, Star } from 'lucide-react'; // Import Star for Favorites
+import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import {
   DropdownMenu,
@@ -17,7 +17,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; // Import Avatar components
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ALL_FUNCTIONALITIES } from '@/lib/functionalities'; // Import functionalities list
 
 // Helper to get initials from name
 const getInitials = (name?: string | null): string => {
@@ -32,9 +33,9 @@ const getInitials = (name?: string | null): string => {
 
 
 export const Navbar: React.FC = () => {
-  const { user, loading, role } = useAuth();
+  const { user, loading, role, favorites } = useAuth(); // Get favorites from context
   const { auth } = useFirebase();
-  const router = useRouter(); // Get router instance
+  const router = useRouter();
   const { toast } = useToast();
 
   const handleSignOut = async () => {
@@ -44,7 +45,7 @@ export const Navbar: React.FC = () => {
           title: "Sesión Cerrada",
           description: "Has cerrado sesión exitosamente.",
       });
-      router.push('/'); // Redirect to home page after sign out
+      router.push('/');
     } catch (error) {
       console.error("Sign out error:", error);
        toast({
@@ -55,21 +56,26 @@ export const Navbar: React.FC = () => {
     }
   };
 
+  // Filter functionalities based on user's favorites
+  const favoriteFunctionalities = React.useMemo(() => {
+    if (!favorites || favorites.length === 0) return [];
+    return ALL_FUNCTIONALITIES.filter(func => favorites.includes(func.id));
+  }, [favorites]);
+
   return (
-    <nav className="bg-card border-b shadow-sm"> {/* Adjusted background and added border */}
-      <div className="container mx-auto px-4 py-2 flex justify-between items-center"> {/* Adjusted padding */}
+    <nav className="bg-card border-b shadow-sm">
+      <div className="container mx-auto px-4 py-2 flex justify-between items-center">
         <Link href="/" className="text-xl font-bold text-primary hover:text-primary/80 transition-colors">
           Cuenta Clara
         </Link>
 
         {!loading && (
-          <div className="flex items-center space-x-3"> {/* Reduced space */}
+          <div className="flex items-center space-x-3">
             {user ? (
                <DropdownMenu>
                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="relative h-9 w-9 rounded-full"> {/* Slightly smaller avatar button */}
-                        <Avatar className="h-9 w-9"> {/* Match button size */}
-                         {/* Add AvatarImage if you have user profile images */}
+                    <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+                        <Avatar className="h-9 w-9">
                          {/* <AvatarImage src={user.photoURL || undefined} alt={user.displayName || 'User'} /> */}
                          <AvatarFallback>{getInitials(user.displayName)}</AvatarFallback>
                         </Avatar>
@@ -85,12 +91,8 @@ export const Navbar: React.FC = () => {
                         </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                        <Link href="/">
-                         <Home className="mr-2 h-4 w-4" />
-                         <span>Dashboard</span>
-                        </Link>
-                    </DropdownMenuItem>
+
+                    {/* Admin Panel Link */}
                     {role === 'admin' && (
                          <DropdownMenuItem asChild>
                            <Link href="/admin">
@@ -99,12 +101,32 @@ export const Navbar: React.FC = () => {
                            </Link>
                          </DropdownMenuItem>
                     )}
+
+                     {/* User Profile Link */}
                      <DropdownMenuItem asChild>
                        <Link href="/profile">
                          <Settings className="mr-2 h-4 w-4" />
-                         <span>Perfil</span>
+                         <span>Mi Perfil</span>
                        </Link>
                      </DropdownMenuItem>
+
+                     {/* Favorites Section */}
+                     {favoriteFunctionalities.length > 0 && (
+                        <>
+                           <DropdownMenuSeparator />
+                           <DropdownMenuLabel>Favoritos</DropdownMenuLabel>
+                           {favoriteFunctionalities.map(fav => (
+                               <DropdownMenuItem key={fav.id} asChild>
+                                   <Link href={fav.route}>
+                                        {fav.icon && <fav.icon className="mr-2 h-4 w-4"/>}
+                                        <span>{fav.name}</span>
+                                   </Link>
+                               </DropdownMenuItem>
+                           ))}
+                        </>
+                     )}
+
+
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
                         <LogOut className="mr-2 h-4 w-4" />
@@ -114,7 +136,7 @@ export const Navbar: React.FC = () => {
                </DropdownMenu>
             ) : (
                <Link href="/" passHref>
-                  <Button variant="outline" size="sm"> {/* Use outline for consistency */}
+                  <Button variant="outline" size="sm">
                      <User className="mr-2 h-4 w-4" />
                      Ingresar / Registrarse
                   </Button>

@@ -1,18 +1,19 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useAuth } from '@/context/AuthContext';
 import { useFirebase } from '@/context/FirebaseContext';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { updateProfile } from 'firebase/auth'; // To update auth profile display name
+import { updateProfile } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox'; // Import Checkbox
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save } from 'lucide-react';
+import { Loader2, Save, Star } from 'lucide-react'; // Added Star
 import {
   Form,
   FormControl,
@@ -23,19 +24,20 @@ import {
 } from "@/components/ui/form";
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import type { UserData } from '@/types/user';
+import { getAccessibleFunctionalities, AppFunctionality } from '@/lib/functionalities'; // Import functionalities and helper
 
-// Schema for profile update validation
+// Schema for profile update validation including favorites
 const profileSchema = z.object({
   name: z.string().min(2, { message: 'El nombre debe tener al menos 2 caracteres.' }).max(50),
   address: z.string().max(150, 'La dirección no puede exceder los 150 caracteres.').optional().or(z.literal('')),
   phone: z.string().max(30, 'El teléfono no puede exceder los 30 caracteres.').optional().or(z.literal('')),
-  // Email is usually not editable directly by the user through this form
+  favorites: z.array(z.string()).optional(), // Array of functionality IDs
 });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
 const UserProfileForm: React.FC = () => {
-  const { user, loading: authLoading, role } = useAuth();
+  const { user, loading: authLoading, role, favorites: currentFavorites } = useAuth();
   const { db, auth } = useFirebase();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -47,10 +49,14 @@ const UserProfileForm: React.FC = () => {
       name: '',
       address: '',
       phone: '',
+      favorites: [], // Initialize favorites
     },
   });
 
-  // Fetch current user data
+  // Get functionalities accessible by the current user's role
+  const accessibleFunctionalities = useMemo(() => getAccessibleFunctionalities(role), [role]);
+
+  // Fetch current user data and populate form
   useEffect(() => {
     const fetchUserData = async () => {
       if (!user) {
@@ -67,13 +73,14 @@ const UserProfileForm: React.FC = () => {
             name: data.name || user.displayName || '',
             address: data.address || '',
             phone: data.phone || '',
+            favorites: data.favorites || [], // Populate favorites from Firestore
           });
         } else {
-          // Fallback if Firestore doc doesn't exist (should ideally not happen)
            form.reset({
              name: user.displayName || '',
              address: '',
              phone: '',
+             favorites: [], // Default empty favorites
           });
           console.warn("User document not found in Firestore for profile.");
         }
@@ -89,41 +96,55 @@ const UserProfileForm: React.FC = () => {
       }
     };
 
-    if (!authLoading) { // Fetch only when auth state is resolved
+    if (!authLoading) {
          fetchUserData();
     }
-  }, [user, db, form, toast, authLoading]);
+    // Add currentFavorites to dependencies to react to external changes if needed
+  }, [user, db, form, toast, authLoading, currentFavorites]);
 
   const onSubmit = async (values: ProfileFormValues) => {
     if (!user) return;
     setIsLoading(true);
     try {
       const userDocRef = doc(db, 'users', user.uid);
-      const updateData: Partial<UserData> = {
+      // Make sure favorites is always an array, even if undefined from form values
+      const favoritesToSave = values.favorites || [];
+      const updateData: Partial<UserData> & { favorites: string[] } = { // Ensure favorites is included
         name: values.name,
         address: values.address?.trim() || null,
         phone: values.phone?.trim() || null,
-        // No role update here, only personal info
+        favorites: favoritesToSave, // Save the selected favorites
         updatedAt: serverTimestamp(),
       };
 
-       // Remove null fields before updating to avoid overwriting with null if they didn't exist
-       Object.keys(updateData).forEach(key => (updateData as any)[key] === null && delete (updateData as any)[key]);
+       // Remove null fields before updating
+       Object.keys(updateData).forEach(key => {
+            if ((updateData as any)[key] === null) {
+                delete (updateData as any)[key];
+            }
+       });
+
 
       await updateDoc(userDocRef, updateData);
 
       // Update Firebase Auth profile display name if it changed
       if (auth.currentUser && auth.currentUser.displayName !== values.name) {
          await updateProfile(auth.currentUser, { displayName: values.name });
-          // Optionally, force refresh AuthContext or trigger a re-fetch if needed
-          // You might need to implement a mechanism in AuthContext to refresh user state
           console.log("Auth profile display name updated.");
+          // Trigger a refresh of AuthContext data (implementation depends on AuthContext)
+          // For now, a page refresh might be needed or implement refresh in AuthContext
       }
 
       toast({
         title: '¡Éxito!',
         description: 'Tu perfil ha sido actualizado.',
       });
+       // Force reload or update context to reflect favorite changes in navbar immediately
+       // Option 1: Force reload (simplest)
+       // window.location.reload();
+       // Option 2: Implement context refresh logic
+       // refreshAuthContext(); // Assuming a function exists in AuthContext
+
     } catch (error) {
       console.error("Error updating profile:", error);
       toast({
@@ -149,7 +170,8 @@ const UserProfileForm: React.FC = () => {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <FormField
+        {/* Personal Info Fields */}
+         <FormField
           control={form.control}
           name="name"
           render={({ field }) => (
@@ -169,7 +191,6 @@ const UserProfileForm: React.FC = () => {
             </FormControl>
              <p className="text-xs text-muted-foreground">El correo electrónico no se puede modificar.</p>
          </FormItem>
-
          <FormField
           control={form.control}
           name="address"
@@ -197,7 +218,61 @@ const UserProfileForm: React.FC = () => {
           )}
         />
 
-        <div className="flex justify-end pt-4">
+         <hr className="my-6" />
+
+         {/* Favorite Functionalities Section */}
+          <div>
+            <h3 className="text-lg font-medium mb-3">Funcionalidades Favoritas</h3>
+            <p className="text-sm text-muted-foreground mb-4">Selecciona las funciones que usas con más frecuencia para un acceso rápido desde el menú.</p>
+             <FormField
+                control={form.control}
+                name="favorites"
+                render={() => (
+                    <FormItem className="space-y-3">
+                        {accessibleFunctionalities.map((item) => (
+                            <FormField
+                            key={item.id}
+                            control={form.control}
+                            name="favorites"
+                            render={({ field }) => {
+                                return (
+                                <FormItem
+                                    key={item.id}
+                                    className="flex flex-row items-center space-x-3 space-y-0 p-3 border rounded-md hover:bg-accent/50"
+                                >
+                                    <FormControl>
+                                    <Checkbox
+                                        checked={field.value?.includes(item.id)}
+                                        onCheckedChange={(checked) => {
+                                        return checked
+                                            ? field.onChange([...(field.value || []), item.id])
+                                            : field.onChange(
+                                                (field.value || []).filter(
+                                                (value) => value !== item.id
+                                                )
+                                            )
+                                        }}
+                                    />
+                                    </FormControl>
+                                     <div className='flex items-center gap-2'>
+                                         <item.icon className="h-4 w-4 text-muted-foreground"/>
+                                         <FormLabel className="font-normal cursor-pointer">
+                                            {item.name}
+                                         </FormLabel>
+                                     </div>
+                                </FormItem>
+                                )
+                            }}
+                            />
+                        ))}
+                        <FormMessage />
+                    </FormItem>
+                )}
+                />
+          </div>
+
+
+        <div className="flex justify-end pt-4 border-t mt-6">
             <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isLoading || loadingData}>
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             Guardar Cambios
