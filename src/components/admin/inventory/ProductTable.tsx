@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState } from 'react';
@@ -28,7 +27,9 @@ const fetchProducts = async (db: any): Promise<Product[]> => {
   const productsCol = collection(db, 'products');
   const snapshot = await getDocs(productsCol);
   // Use barcode (doc.id) as the product ID
-  return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Product));
+  return snapshot.docs
+    .map(doc => ({ ...doc.data(), id: doc.id } as Product))
+    .sort((a, b) => a.name.localeCompare(b.name)); // Sort alphabetically by name
 };
 
 // Delete product function
@@ -200,4 +201,3 @@ const ProductTable: React.FC = () => {
 };
 
 export default ProductTable;
-
