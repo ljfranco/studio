@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react'; // Added useRef, useEffect
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { collection, getDocs } from 'firebase/firestore'; // Removed doc, updateDoc
+import { collection, getDocs } from 'firebase/firestore';
 import { useFirebase } from '@/context/FirebaseContext';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input'; // Import Input
+import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
@@ -14,10 +14,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-// Removed Input import
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Ban, Pencil, Percent, Info, FileDown, Search } from 'lucide-react'; // Removed Save, X icons, Added FileDown, Search
+import { Ban, Pencil, Percent, Info, FileDown, Search, ScanLine, Camera } from 'lucide-react'; // Added ScanLine, Camera
 import { formatCurrency, cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { Product } from '@/types/product';
@@ -28,11 +27,12 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-import EditPriceDialog from './EditPriceDialog'; // Import the new dialog component
-import * as XLSX from 'xlsx'; // Import xlsx library
-import jsPDF from 'jspdf'; // Import jsPDF
-import 'jspdf-autotable'; // Import autoTable plugin
-import type { UserOptions } from 'jspdf-autotable'; // Import UserOptions type
+import EditPriceDialog from './EditPriceDialog';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import type { UserOptions } from 'jspdf-autotable';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Import Alert
 
 // Extend jsPDF interface to include autoTable
 declare module 'jspdf' {
@@ -47,7 +47,7 @@ const fetchProducts = async (db: any): Promise<Product[]> => {
   const snapshot = await getDocs(productsCol);
   return snapshot.docs
     .map(doc => ({ ...doc.data(), id: doc.id } as Product))
-    .sort((a, b) => a.name.localeCompare(b.name)); // Sort alphabetically by name
+    .sort((a, b) => a.name.localeCompare(b.name));
 };
 
 // Fetch distributors function
@@ -61,9 +61,13 @@ const PriceListTable: React.FC = () => {
   const { db } = useFirebase();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false); // State for modal
-  const [selectedProductForEdit, setSelectedProductForEdit] = useState<Product | null>(null); // State for product to edit
-  const [searchTerm, setSearchTerm] = useState(''); // State for search term
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedProductForEdit, setSelectedProductForEdit] = useState<Product | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isScanning, setIsScanning] = useState(false); // Scanner state
+  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null); // Camera permission
+  const videoRef = useRef<HTMLVideoElement>(null); // Video ref
+  const canvasRef = useRef<HTMLCanvasElement>(null); // Canvas ref (optional for overlay)
 
   // Fetch products
   const { data: products = [], isLoading: isLoadingProducts, error: errorProducts } = useQuery<Product[]>({
@@ -92,11 +96,108 @@ const PriceListTable: React.FC = () => {
     );
   }, [products, searchTerm]);
 
+  // --- Barcode Scanning Logic (Copied & adapted) ---
+   const isBarcodeDetectorSupported = typeof window !== 'undefined' && 'BarcodeDetector' in window;
+
+   useEffect(() => {
+    let stream: MediaStream | null = null;
+    let stopStream = () => {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+        }
+        if (videoRef.current) {
+           videoRef.current.srcObject = null;
+        }
+    }
+
+    const getCameraPermission = async () => {
+      if (!isScanning) {
+        setHasCameraPermission(null);
+        stopStream();
+        return;
+      }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        setHasCameraPermission(true);
+        if (videoRef.current) {
+             videoRef.current.srcObject = stream;
+             videoRef.current.play().catch(playError => {
+                 console.error("Error playing video:", playError);
+                 setHasCameraPermission(false);
+                 toast({ variant: 'destructive', title: 'Error de Cámara', description: 'No se pudo iniciar la cámara.'});
+                 setIsScanning(false);
+             });
+        } else {
+             stopStream();
+             setIsScanning(false);
+        }
+      } catch (err) {
+        console.error('Error accessing camera:', err);
+        setHasCameraPermission(false);
+        toast({ variant: 'destructive', title: 'Acceso a Cámara Denegado' });
+        setIsScanning(false);
+        stopStream();
+      }
+    };
+    getCameraPermission();
+    return stopStream;
+  }, [isScanning, toast]);
+
+  useEffect(() => {
+      if (!isScanning || !hasCameraPermission || !videoRef.current || !isBarcodeDetectorSupported) return;
+
+      let animationFrameId: number;
+      let isDetectionRunning = true;
+      const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['ean_13', 'upc_a', 'code_128', 'ean_8', 'itf', 'code_39', 'code_93'] });
+
+      const detectBarcode = async () => {
+          if (!isDetectionRunning || !videoRef.current || !videoRef.current.srcObject || !isScanning) return;
+          if (videoRef.current.readyState < videoRef.current.HAVE_METADATA || videoRef.current.videoWidth === 0) {
+               if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
+               return;
+          }
+
+          try {
+            const barcodes = await barcodeDetector.detect(videoRef.current);
+            if (barcodes.length > 0 && barcodes[0].rawValue && isDetectionRunning) {
+              const scannedId = barcodes[0].rawValue;
+              console.log("Barcode detected:", scannedId);
+              setSearchTerm(scannedId); // Update search term with scanned barcode
+              setIsScanning(false);
+              isDetectionRunning = false;
+              toast({ title: "Código Detectado", description: scannedId });
+            } else if (isDetectionRunning) {
+              animationFrameId = requestAnimationFrame(detectBarcode);
+            }
+          } catch (error) {
+             if (!(error instanceof DOMException && error.name === 'InvalidStateError')) {
+                console.error("Error detecting barcode:", error);
+             }
+             if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
+          }
+      };
+       if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
+
+       return () => {
+           isDetectionRunning = false;
+           cancelAnimationFrame(animationFrameId);
+       };
+   }, [isScanning, hasCameraPermission, isBarcodeDetectorSupported, toast]);
+
+   const toggleScan = () => {
+     if (!isBarcodeDetectorSupported) {
+         toast({ title: "No Soportado", description: "El escáner no es compatible.", variant: "destructive" });
+         return;
+     }
+     setIsScanning(prev => !prev);
+   };
+  // --- End Barcode Scanning Logic ---
 
   // Calculate lowest purchase price and identify the distributor using filtered data
   const lowestPrices = useMemo(() => {
     const prices: Record<string, { price: number; distributorId: string | null }> = {};
-    filteredProducts.forEach(product => { // Use filteredProducts
+    filteredProducts.forEach(product => {
       let lowest = Infinity;
       let lowestDistributorId: string | null = null;
       if (product.purchasePrices) {
@@ -110,7 +211,7 @@ const PriceListTable: React.FC = () => {
       prices[product.id] = { price: lowest === Infinity ? 0 : lowest, distributorId: lowestDistributorId };
     });
     return prices;
-  }, [filteredProducts]); // Depend on filteredProducts
+  }, [filteredProducts]);
 
   // Calculate suggested selling price based on last purchase price and margin
   const calculateSuggestedPrice = (product: Product): number | null => {
@@ -136,7 +237,7 @@ const PriceListTable: React.FC = () => {
 
    // --- Export Functions (Use filteredProducts for exports) ---
    const handleExportExcel = () => {
-    const dataToExport = filteredProducts.map(product => { // Use filteredProducts
+    const dataToExport = filteredProducts.map(product => {
         const suggestedPrice = calculateSuggestedPrice(product);
         const baseData: any = {
             'Código': product.id,
@@ -146,30 +247,24 @@ const PriceListTable: React.FC = () => {
             'P. Venta Sug.': suggestedPrice ?? 0,
             'P. Venta': product.sellingPrice ?? 0,
         };
-        // Add distributor prices
         distributors.forEach(dist => {
             baseData[dist.name] = product.purchasePrices?.[dist.id] ?? 0;
         });
         return baseData;
     });
 
-    // Format numbers as numbers in Excel
     const formattedData = dataToExport.map(row => {
         const newRow = { ...row };
         Object.keys(newRow).forEach(key => {
             if (typeof newRow[key] === 'string' && !isNaN(parseFloat(newRow[key]))) {
-                 // Check if it's a price or percentage
                 if (key.includes('P. Venta') || key.includes('P. Compra') || distributors.some(d => d.name === key)) {
-                    newRow[key] = parseFloat(newRow[key]); // Format as number (currency)
+                    newRow[key] = parseFloat(newRow[key]);
                 } else if (key.includes('Margen (%)')) {
-                     newRow[key] = parseFloat(newRow[key]); // Format as number (percentage)
+                     newRow[key] = parseFloat(newRow[key]);
                 }
             } else if (typeof newRow[key] === 'number'){
-                 // Ensure existing numbers are handled correctly
                  if (key.includes('P. Venta') || key.includes('P. Compra') || distributors.some(d => d.name === key)) {
-                    // Currency - no change needed if already number
                 } else if (key.includes('Margen (%)')) {
-                     // Percentage - no change needed if already number
                 }
             }
         });
@@ -179,7 +274,6 @@ const PriceListTable: React.FC = () => {
 
     const worksheet = XLSX.utils.json_to_sheet(formattedData);
 
-     // Define column widths (optional, adjust as needed)
      const columnWidths = [
         { wch: 15 }, // Código
         { wch: 30 }, // Producto
@@ -187,36 +281,28 @@ const PriceListTable: React.FC = () => {
         { wch: 12 }, // Margen (%)
         { wch: 15 }, // P. Venta Sug.
         { wch: 15 }, // P. Venta
-        // Distributor columns (auto-width might be okay, or set specific widths)
         ...distributors.map(() => ({ wch: 15 }))
     ];
     worksheet['!cols'] = columnWidths;
 
-    // Apply number formatting (optional but recommended)
-    // Get the range of the sheet
     const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-    for (let R = range.s.r + 1; R <= range.e.r; ++R) { // Start from row 1 (skip header)
-        // Apply currency format to relevant columns (adjust indices based on your data structure)
-        const currencyCols = [2, 4, 5]; // Indices for Ult. P. Compra, P. Venta Sug., P. Venta
-        distributors.forEach((_, i) => currencyCols.push(6 + i)); // Add distributor columns
+    for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+        const currencyCols = [2, 4, 5];
+        distributors.forEach((_, i) => currencyCols.push(6 + i));
 
         currencyCols.forEach(C => {
              const cell_address = { c: C, r: R };
              const cell_ref = XLSX.utils.encode_cell(cell_address);
-             if (worksheet[cell_ref] && typeof worksheet[cell_ref].v === 'number') { // Check if value is number
-                 worksheet[cell_ref].t = 'n'; // Set type to number
-                 worksheet[cell_ref].z = '$#,##0.00'; // Currency format
+             if (worksheet[cell_ref] && typeof worksheet[cell_ref].v === 'number') {
+                 worksheet[cell_ref].t = 'n';
+                 worksheet[cell_ref].z = '$#,##0.00';
              }
         });
 
-        // Apply percentage format to Margin column (index 3)
          const marginCellRef = XLSX.utils.encode_cell({ c: 3, r: R });
-         if (worksheet[marginCellRef] && typeof worksheet[marginCellRef].v === 'number') { // Check if value is number
+         if (worksheet[marginCellRef] && typeof worksheet[marginCellRef].v === 'number') {
              worksheet[marginCellRef].t = 'n';
-             worksheet[marginCellRef].z = '0.0"%"'; // Percentage format
-             // Divide by 100 if storing as whole number but want Excel % format
-             // worksheet[marginCellRef].v = worksheet[marginCellRef].v / 100;
-             // worksheet[marginCellRef].z = '0.0%'; // Use standard Excel % format
+             worksheet[marginCellRef].z = '0.0"%"';
          }
     }
 
@@ -230,11 +316,11 @@ const PriceListTable: React.FC = () => {
      const doc = new jsPDF({ orientation: 'landscape' });
      const tableColumn = [
         "Código", "Producto", "Últ. Compra", "Margen", "Sugerido", "Venta",
-        ...distributors.map(d => d.name) // Add distributor names as headers
+        ...distributors.map(d => d.name)
      ];
      const tableRows: (string | number)[][] = [];
 
-     filteredProducts.forEach(product => { // Use filteredProducts
+     filteredProducts.forEach(product => {
         const suggestedPrice = calculateSuggestedPrice(product);
         const productData = [
             product.id,
@@ -251,26 +337,22 @@ const PriceListTable: React.FC = () => {
      doc.autoTable({
         head: [tableColumn],
         body: tableRows,
-        startY: 20, // Start table below title
-        theme: 'grid', // 'striped', 'grid', 'plain'
-        styles: { fontSize: 8, cellPadding: 2 }, // Adjust font size and padding
-        headStyles: { fillColor: [0, 150, 136], textColor: 255, fontStyle: 'bold', halign: 'center' }, // Teal header
+        startY: 20,
+        theme: 'grid',
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [0, 150, 136], textColor: 255, fontStyle: 'bold', halign: 'center' },
         columnStyles: {
-            0: { cellWidth: 25 }, // Código
-            1: { cellWidth: 45 }, // Producto
-            2: { halign: 'right', cellWidth: 20 }, // Últ. Compra
-            3: { halign: 'right', cellWidth: 15 }, // Margen
-            4: { halign: 'right', cellWidth: 20 }, // Sugerido
-            5: { halign: 'right', cellWidth: 20 }, // Venta
-            // Auto width for distributors might work, or set fixed widths
-            // Example: ...distributors.map(() => ({ halign: 'right', cellWidth: 20 }))
+            0: { cellWidth: 25 },
+            1: { cellWidth: 45 },
+            2: { halign: 'right', cellWidth: 20 },
+            3: { halign: 'right', cellWidth: 15 },
+            4: { halign: 'right', cellWidth: 20 },
+            5: { halign: 'right', cellWidth: 20 },
         },
         didDrawPage: (data) => {
-             // Header
              doc.setFontSize(18);
              doc.setTextColor(40);
              doc.text("Lista de Precios", data.settings.margin.left, 15);
-             // Footer
              const pageCount = doc.internal.getNumberOfPages();
              doc.setFontSize(10);
              doc.text(`Página ${data.pageNumber} de ${pageCount}`, data.settings.margin.left, doc.internal.pageSize.height - 10);
@@ -292,25 +374,33 @@ const PriceListTable: React.FC = () => {
     <TooltipProvider>
         <Card>
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between flex-wrap gap-4">
-             {/* Title and Description */}
             <div>
                  <CardTitle>Lista de Precios</CardTitle>
                  <CardDescription>Comparativa de precios de venta y compra. Busca por nombre o código.</CardDescription>
             </div>
-            {/* Search and Export */}
              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
-                 {/* Search Input */}
-                <div className="relative w-full sm:w-auto">
+                <div className="relative flex-grow min-w-[150px] sm:flex-grow-0">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                         type="search"
-                        placeholder="Buscar producto..."
+                        placeholder="Buscar o escanear..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-8 w-full sm:w-56" // Adjust width
+                        className="pl-8 w-full sm:w-56"
                     />
                 </div>
-                 {/* Export Buttons */}
+                {/* Scan Button */}
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={toggleScan}
+                    title={isScanning ? "Detener Escáner" : "Escanear Código"}
+                    disabled={!isBarcodeDetectorSupported}
+                    className={cn("shrink-0", isScanning && "bg-destructive hover:bg-destructive/90 text-destructive-foreground")}
+                >
+                    <ScanLine className="h-5 w-5" />
+                </Button>
                  <div className="flex gap-2 w-full sm:w-auto">
                     <Button variant="outline" onClick={handleExportExcel} disabled={filteredProducts.length === 0 || isLoading} className="flex-1 sm:flex-none">
                         <FileDown className="mr-2 h-4 w-4" /> Excel
@@ -322,6 +412,20 @@ const PriceListTable: React.FC = () => {
              </div>
         </CardHeader>
         <CardContent>
+            {/* Scanner View */}
+             {isScanning && (
+                 <div className="relative mb-4">
+                     <video ref={videoRef} className={cn("w-full max-w-sm mx-auto aspect-video rounded-md bg-muted", hasCameraPermission === false && "hidden")} autoPlay muted playsInline />
+                     <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full pointer-events-none" />
+                     <div className="absolute top-1/2 left-1/2 w-3/4 h-0.5 bg-red-500 animate-pulse -translate-x-1/2 -translate-y-1/2" /> {/* Centered Scan Line */}
+                     {hasCameraPermission === null && !videoRef.current?.srcObject && (
+                         <div className="absolute inset-0 flex items-center justify-center bg-muted rounded-md"><LoadingSpinner /><p className="ml-2 text-sm text-muted-foreground">Iniciando...</p></div>
+                     )}
+                     {hasCameraPermission === false && (
+                         <Alert variant="destructive" className="mt-2"><Camera className="h-4 w-4" /><AlertTitle>Permiso Requerido</AlertTitle><AlertDescription>Permite el acceso a la cámara.</AlertDescription></Alert>
+                     )}
+                 </div>
+             )}
             {isLoading ? (
             <div className="flex justify-center items-center h-40"><LoadingSpinner /></div>
             ) : filteredProducts.length === 0 ? (
@@ -329,14 +433,12 @@ const PriceListTable: React.FC = () => {
                     {searchTerm ? 'No se encontraron productos.' : 'No hay productos para mostrar precios.'}
                 </p>
             ) : (
-            <div className="overflow-x-auto border rounded-md"> {/* Added border and rounded */}
-                <Table className="min-w-full"> {/* Ensure table takes minimum full width */}
+            <div className="overflow-x-auto border rounded-md">
+                <Table className="min-w-full">
                 <TableHeader>
                     <TableRow>
-                    {/* Sticky Product Column */}
-                    <TableHead className="sticky left-0 bg-card z-20 min-w-[150px] border-r">Producto</TableHead> {/* Use bg-card */}
-                    {/* Sticky Actions Column - Minimal Width */}
-                    <TableHead className="text-center sticky left-[150px] bg-card z-20 px-1 w-auto border-r"></TableHead> {/* Use bg-card */}
+                    <TableHead className="sticky left-0 bg-card z-20 min-w-[150px] border-r">Producto</TableHead>
+                    <TableHead className="text-center sticky left-[150px] bg-card z-20 px-1 w-auto border-r"></TableHead>
                     <TableHead className="text-right min-w-[120px]">Últ. P. Compra</TableHead>
                     <TableHead className="text-right min-w-[100px]">Margen (%)</TableHead>
                     <TableHead className="text-right min-w-[120px]">P. Venta Sug.</TableHead>
@@ -353,22 +455,19 @@ const PriceListTable: React.FC = () => {
                         const suggestedPrice = calculateSuggestedPrice(product);
                         return (
                             <TableRow key={product.id} className="hover:bg-muted/50">
-                                {/* Product Name (Sticky Left 0) */}
-                                <TableCell className="font-medium sticky left-0 bg-card z-10 border-r"> {/* Use bg-card */}
+                                <TableCell className="font-medium sticky left-0 bg-card z-10 border-r">
                                     <div className="flex flex-col">
                                         <span>{product.name}</span>
                                         <span className="text-xs text-muted-foreground font-mono">{product.id}</span>
                                     </div>
                                 </TableCell>
-
-                                 {/* Actions Cell (Sticky Left 150px - Minimal Width) */}
-                                <TableCell className="text-center sticky left-[150px] bg-card z-10 px-1 border-r"> {/* Use bg-card */}
+                                <TableCell className="text-center sticky left-[150px] bg-card z-10 px-1 border-r">
                                     <Tooltip>
                                         <TooltipTrigger asChild>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-8 w-8" // Fixed size for icon button
+                                                className="h-8 w-8"
                                                 onClick={() => handleEditClick(product)}
                                                 title={`Editar precios de ${product.name}`}
                                             >
@@ -380,29 +479,18 @@ const PriceListTable: React.FC = () => {
                                         </TooltipContent>
                                     </Tooltip>
                                 </TableCell>
-
-                                {/* Last Purchase Price */}
                                 <TableCell className="text-right text-muted-foreground">
                                     {formatCurrency(product.lastPurchasePrice ?? 0)}
                                 </TableCell>
-
-                                {/* Margin */}
                                 <TableCell className="text-right">
                                     {`${product.margin ?? 0}%`}
                                 </TableCell>
-
-                                {/* Suggested Selling Price */}
                                 <TableCell className="text-right text-blue-600">
                                     {suggestedPrice !== null ? formatCurrency(suggestedPrice) : <Ban className="h-4 w-4 mx-auto text-muted-foreground" title="N/A"/>}
                                 </TableCell>
-
-
-                                {/* Selling Price */}
                                 <TableCell className="text-right">
                                     {formatCurrency(product.sellingPrice ?? 0)}
                                 </TableCell>
-
-                                {/* Distributor Purchase Prices */}
                                 {distributors.map(dist => {
                                 const purchasePrice = product.purchasePrices?.[dist.id];
                                 const isLowest = lowestPrices[product.id]?.distributorId === dist.id && lowestPrices[product.id]?.price > 0;
@@ -421,7 +509,6 @@ const PriceListTable: React.FC = () => {
             </div>
             )}
         </CardContent>
-        {/* Render the EditPriceDialog */}
         {selectedProductForEdit && (
             <EditPriceDialog
                 isOpen={isEditDialogOpen}
