@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -42,8 +41,8 @@ const productSchema = z.object({
   id: z.string().min(1, { message: 'El código de barras es requerido.' }), // Barcode as ID
   name: z.string().min(2, { message: 'El nombre debe tener al menos 2 caracteres.' }).max(100),
   quantity: z.preprocess(
-    (val) => parseInt(String(val), 10),
-    z.number().int().min(0, { message: 'La cantidad no puede ser negativa.' }).optional().default(0)
+    (val) => val === '' || val === null || val === undefined ? undefined : parseInt(String(val), 10), // Allow empty/null/undefined
+    z.number().int().min(0, { message: 'La cantidad no puede ser negativa.' }).optional() // Keep optional
   ),
   sellingPrice: z.preprocess(
     (val) => val === '' || val === null || val === undefined ? undefined : parseFloat(String(val).replace(/[^0-9.]+/g, "")), // Handle empty string/null for optional
@@ -90,7 +89,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
     defaultValues: {
       id: '',
       name: '',
-      quantity: 0,
+      quantity: undefined, // Initialize quantity as undefined
       sellingPrice: undefined, // Initialize as undefined for optional field
       margin: undefined, // Initialize margin as undefined
     },
@@ -220,7 +219,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
         form.reset({
           id: product.id,
           name: product.name,
-          quantity: product.quantity ?? 0,
+          quantity: product.quantity ?? undefined, // Use undefined for placeholder
           sellingPrice: product.sellingPrice ?? undefined,
           margin: product.margin ?? undefined, // Reset margin in edit mode
         });
@@ -229,7 +228,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
           form.reset({
               id: product.id, // Prefill ID
               name: '',
-              quantity: 0,
+              quantity: undefined, // Default undefined for placeholder
               sellingPrice: undefined, // Default optional field
               margin: undefined, // Default margin
           });
@@ -239,7 +238,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
         form.reset({
           id: '',
           name: '',
-          quantity: 0,
+          quantity: undefined, // Default undefined
           sellingPrice: undefined,
           margin: undefined,
         });
@@ -263,12 +262,14 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
     const finalSellingPrice = isMinimalAdd ? 0 : (values.sellingPrice ?? 0);
     // Ensure margin is null instead of undefined when saving to Firestore
     const finalMargin = values.margin ?? null; // Convert undefined to null
+    // Ensure quantity is 0 if undefined when saving
+    const finalQuantity = isMinimalAdd ? 0 : (values.quantity ?? 0);
 
     // Construct final product data, ensuring required fields have defaults
     const finalData = {
         id: values.id,
         name: values.name,
-        quantity: isMinimalAdd ? 0 : (values.quantity ?? 0),
+        quantity: finalQuantity, // Use finalQuantity
         sellingPrice: finalSellingPrice,
         margin: finalMargin,
         updatedAt: Timestamp.now(), // Set for both add and edit
@@ -280,12 +281,12 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
       // Update existing document
       const updatePayload: Record<string, any> = { // Use Record<string, any> for flexibility
           name: values.name,
-          quantity: values.quantity ?? 0,
-          sellingPrice: values.sellingPrice ?? 0,
+          quantity: values.quantity ?? 0, // Default to 0 if undefined
+          sellingPrice: values.sellingPrice ?? 0, // Default to 0 if undefined
           margin: values.margin ?? null, // Convert undefined to null for update
           updatedAt: serverTimestamp(),
       };
-      // Remove undefined fields before updating
+      // Remove undefined fields before updating (not strictly necessary with defaults, but good practice)
       Object.keys(updatePayload).forEach(key => updatePayload[key] === undefined && delete updatePayload[key]);
 
       await updateDoc(productRef, updatePayload);
@@ -301,7 +302,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
         finalData.createdAt = Timestamp.now(); // Set createdAt for new doc
         finalData.lastPurchasePrice = null; // Ensure lastPurchasePrice is null for new products
 
-        // Remove undefined fields before setting
+        // Remove undefined fields before setting (again, less critical with defaults)
         Object.keys(finalData).forEach(key => (finalData as any)[key] === undefined && delete (finalData as any)[key]);
 
         await setDoc(productRef, finalData); // Use finalData which includes ID
@@ -344,6 +345,11 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
     // Validation for sellingPrice only if not minimal add
     if (!isMinimalAdd && (values.sellingPrice === undefined || values.sellingPrice === null || isNaN(values.sellingPrice))) {
         form.setError('sellingPrice', { type: 'manual', message: 'El precio de venta es requerido.' });
+        return;
+    }
+    // Quantity validation if not minimal add
+     if (!isMinimalAdd && (values.quantity === undefined || values.quantity === null || isNaN(values.quantity))) {
+        form.setError('quantity', { type: 'manual', message: 'La cantidad es requerida.' });
         return;
     }
     // No mandatory validation for margin
@@ -475,7 +481,15 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
                       <FormItem>
                         <FormLabel>Cantidad</FormLabel>
                         <FormControl>
-                          <Input type="number" placeholder="0" {...field} disabled={isSaving} min="0" step="1" />
+                          <Input
+                             type="number"
+                             placeholder="Cant." // Use placeholder
+                             {...field}
+                             value={field.value ?? ''} // Use empty string for placeholder
+                             onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))} // Handle empty string
+                             disabled={isSaving}
+                             min="0"
+                             step="1" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -504,7 +518,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
                             <FormControl>
                             <Input
                                 type="number"
-                                placeholder="0"
+                                placeholder="%" // Changed placeholder
                                 {...field}
                                 disabled={isSaving}
                                 min="0"
@@ -547,4 +561,3 @@ if (typeof window !== 'undefined' && !('BarcodeDetector' in window)) {
 
 
 export default AddEditProductDialog;
-

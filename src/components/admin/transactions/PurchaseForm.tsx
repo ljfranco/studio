@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -50,7 +49,7 @@ const PurchaseForm: React.FC = () => {
     // Removed selectedDistributorId state
     const [purchaseItems, setPurchaseItems] = useState<PurchaseItem[]>([]);
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-    const [quantity, setQuantity] = useState<number>(1);
+    const [quantity, setQuantity] = useState<number | ''>(''); // Allow empty string for placeholder
     const [purchasePrice, setPurchasePrice] = useState<string>(''); // Store as string for input flexibility
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
@@ -92,6 +91,7 @@ const PurchaseForm: React.FC = () => {
         setSearchText(product ? `${product.name} (${product.id})` : '');
         // Pre-fill purchase price if available from last purchase
         setPurchasePrice(product?.lastPurchasePrice?.toString() ?? '');
+        setQuantity(''); // Reset quantity when selecting a new product
      };
 
 
@@ -185,6 +185,7 @@ const PurchaseForm: React.FC = () => {
                       setSelectedProduct(product);
                       setSearchText(`${product.name} (${product.id})`);
                       setPurchasePrice(product.lastPurchasePrice?.toString() ?? ''); // Pre-fill last purchase price on scan
+                       setQuantity(''); // Reset quantity on scan
                       toast({ title: "Código Detectado", description: `${product.name}` });
                   } else {
                        setBarcodeToAdd(scannedId);
@@ -229,12 +230,14 @@ const PurchaseForm: React.FC = () => {
               setSelectedProduct(null);
               setSearchText('');
               setPurchasePrice('');
+              setQuantity(''); // Reset quantity on scan start
           }
        };
 
     // --- Purchase Item Management ---
     const handleAddItem = () => {
-        if (!selectedProduct || quantity <= 0) {
+        const currentQuantity = Number(quantity); // Convert '' or number to number
+        if (!selectedProduct || !quantity || currentQuantity <= 0) { // Check if quantity is empty or <= 0
             toast({ title: 'Error', description: 'Selecciona un producto y una cantidad válida.', variant: 'destructive' });
             return;
         }
@@ -253,9 +256,9 @@ const PurchaseForm: React.FC = () => {
                 item.productId === selectedProduct.id
                     ? {
                         ...item,
-                        quantity: item.quantity + quantity,
+                        quantity: item.quantity + currentQuantity,
                         purchasePrice: price, // Update price to the newly entered one
-                        totalCost: (item.quantity + quantity) * price
+                        totalCost: (item.quantity + currentQuantity) * price
                       }
                     : item
             );
@@ -263,9 +266,9 @@ const PurchaseForm: React.FC = () => {
             const newItem: PurchaseItem = {
                 productId: selectedProduct.id,
                 productName: selectedProduct.name,
-                quantity: quantity,
+                quantity: currentQuantity,
                 purchasePrice: price,
-                totalCost: quantity * price,
+                totalCost: currentQuantity * price,
             };
             updatedItems = [...purchaseItems, newItem];
         }
@@ -274,7 +277,7 @@ const PurchaseForm: React.FC = () => {
         // Reset inputs
         setSelectedProduct(null);
         setSearchText('');
-        setQuantity(1);
+        setQuantity(''); // Reset quantity to empty for placeholder
         setPurchasePrice('');
     };
 
@@ -339,7 +342,7 @@ const PurchaseForm: React.FC = () => {
             setPurchaseItems([]);
             setSelectedProduct(null);
             setSearchText('');
-            setQuantity(1);
+            setQuantity(''); // Reset quantity
             setPurchasePrice('');
 
             queryClient.invalidateQueries({ queryKey: ['products'] }); // Invalidate products cache
@@ -366,6 +369,7 @@ const PurchaseForm: React.FC = () => {
             setSelectedProduct(newProduct);
             setSearchText(`${newProduct.name} (${newProduct.id})`); // Set search text
             setPurchasePrice(newProduct.lastPurchasePrice?.toString() ?? ''); // Set last purchase price if available
+            setQuantity(''); // Reset quantity
          }
 
          setBarcodeToAdd(null); // Clear the barcode to add state
@@ -453,8 +457,9 @@ const PurchaseForm: React.FC = () => {
                             type="number"
                             min="1"
                             step="1"
+                            placeholder="Cant." // Use placeholder
                             value={quantity}
-                            onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 1)}
+                            onChange={(e) => setQuantity(e.target.value === '' ? '' : parseInt(e.target.value, 10) || '')} // Allow empty string
                             className="w-full text-center"
                             disabled={!selectedProduct || isSubmitting}
                         />
@@ -478,7 +483,7 @@ const PurchaseForm: React.FC = () => {
                      <Button
                         type="button"
                         onClick={handleAddItem}
-                        disabled={!selectedProduct || quantity <= 0 || !purchasePrice || isSubmitting}
+                        disabled={!selectedProduct || !quantity || quantity <= 0 || !purchasePrice || isSubmitting} // Update disabled check
                         className="w-full sm:w-auto shrink-0"
                      >
                         <PlusCircle className="mr-2 h-4 w-4" /> Agregar
