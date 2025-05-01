@@ -259,45 +259,61 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
   const mutationFn = async (values: ProductFormValues): Promise<Product> => { // Return added/updated product
     const productRef = doc(db, 'products', values.id); // Use barcode as document ID
 
-    // Adjust sellingPrice and margin for minimal add
-    const finalSellingPrice = isMinimalAdd ? 0 : (values.sellingPrice ?? 0); // Default to 0 if minimal add or undefined
-    const finalMargin = isMinimalAdd ? undefined : (values.margin ?? undefined); // Default to undefined if minimal add or undefined
+    // Adjust sellingPrice and margin for minimal add or if undefined
+    const finalSellingPrice = isMinimalAdd ? 0 : (values.sellingPrice ?? 0);
+    // Ensure margin is null instead of undefined when saving to Firestore
+    const finalMargin = values.margin ?? null; // Convert undefined to null
 
-    const finalData: Product = { // Construct final product data
+    // Construct final product data, ensuring required fields have defaults
+    const finalData = {
         id: values.id,
         name: values.name,
-        quantity: isMinimalAdd ? 0 : (values.quantity ?? 0), // Default quantity to 0 if minimal add
+        quantity: isMinimalAdd ? 0 : (values.quantity ?? 0),
         sellingPrice: finalSellingPrice,
-        margin: finalMargin, // Add margin to final data
+        margin: finalMargin,
         updatedAt: Timestamp.now(), // Set for both add and edit
-        // lastPurchasePrice is updated only via PurchaseForm
+        createdAt: isEditMode ? product?.createdAt : Timestamp.now(), // Preserve or set createdAt
+        lastPurchasePrice: isEditMode ? product?.lastPurchasePrice : null, // Preserve or set lastPurchasePrice
     };
 
     if (isEditMode && product) {
       // Update existing document
-       const updatePayload: Partial<Product> = {
+      const updatePayload: Record<string, any> = { // Use Record<string, any> for flexibility
           name: values.name,
           quantity: values.quantity ?? 0,
-          sellingPrice: values.sellingPrice ?? 0, // Default to 0 if undefined during edit
-          margin: values.margin ?? undefined, // Include margin in update, allow undefined to remove
+          sellingPrice: values.sellingPrice ?? 0,
+          margin: values.margin ?? null, // Convert undefined to null for update
           updatedAt: serverTimestamp(),
-       };
+      };
+      // Remove undefined fields before updating
+      Object.keys(updatePayload).forEach(key => updatePayload[key] === undefined && delete updatePayload[key]);
+
       await updateDoc(productRef, updatePayload);
-      finalData.createdAt = product?.createdAt; // Preserve original createdAt if editing
-      finalData.lastPurchasePrice = product?.lastPurchasePrice; // Preserve last purchase price if editing
+      // Merge existing non-updated fields back if necessary (like createdAt)
+      finalData.createdAt = product.createdAt;
+      finalData.lastPurchasePrice = product.lastPurchasePrice;
     } else {
-        // Check if product already exists before adding
+        // Add new document
         const docSnap = await getDoc(productRef);
         if (docSnap.exists()) {
              throw new Error(`El producto con código de barras ${values.id} ya existe.`);
         }
-      // Add new document with createdAt timestamp
-      finalData.createdAt = Timestamp.now();
-      finalData.lastPurchasePrice = undefined; // Ensure lastPurchasePrice is undefined for new products
-      await setDoc(productRef, finalData); // Use finalData which includes ID
+        finalData.createdAt = Timestamp.now(); // Set createdAt for new doc
+        finalData.lastPurchasePrice = null; // Ensure lastPurchasePrice is null for new products
+
+        // Remove undefined fields before setting
+        Object.keys(finalData).forEach(key => (finalData as any)[key] === undefined && delete (finalData as any)[key]);
+
+        await setDoc(productRef, finalData); // Use finalData which includes ID
     }
-     return finalData; // Return the full product data
+     // Return the full product data, replacing nulls back to undefined if needed for the app state
+     return {
+       ...finalData,
+       margin: finalData.margin === null ? undefined : finalData.margin,
+       lastPurchasePrice: finalData.lastPurchasePrice === null ? undefined : finalData.lastPurchasePrice,
+     } as Product;
   };
+
 
   const mutation = useMutation({
     mutationFn,
