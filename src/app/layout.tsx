@@ -15,8 +15,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'Cuenta Clara',
-  description: 'Gestiona tu estado de cuenta de forma sencilla.',
+  title: 'EasyManage', // Updated title
+  description: 'Gestiona tu estado de cuenta de forma sencilla.', // Consider updating description later if needed
 };
 
 export default function RootLayout({
