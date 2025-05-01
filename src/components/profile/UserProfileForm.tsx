@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -139,11 +138,8 @@ const UserProfileForm: React.FC = () => {
         title: '¡Éxito!',
         description: 'Tu perfil ha sido actualizado.',
       });
-       // Force reload or update context to reflect favorite changes in navbar immediately
-       // Option 1: Force reload (simplest)
-       // window.location.reload();
-       // Option 2: Implement context refresh logic
-       // refreshAuthContext(); // Assuming a function exists in AuthContext
+       // The AuthContext listener should now automatically pick up the changes in the user document (including favorites)
+       // and update the context state, causing the Navbar to re-render with the new favorites.
 
     } catch (error) {
       console.error("Error updating profile:", error);
