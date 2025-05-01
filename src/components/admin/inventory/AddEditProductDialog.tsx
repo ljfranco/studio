@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -75,11 +76,10 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isSaving, setIsSaving] = useState(false);
-  const [isScanning, setIsScanning] = useState(false);
-  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null); // null = unknown, true = granted, false = denied
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null); // For potentially drawing scan lines/results
-
+  const [isScanning, setIsScanning] = useState(false); // State for scanning mode
+  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null); // Camera permission state
+  const videoRef = useRef<HTMLVideoElement>(null); // Ref for video element
+  const canvasRef = useRef<HTMLCanvasElement>(null); // Ref for canvas overlay
 
   const isEditMode = !!product && !!product.name && !isMinimalAdd; // Edit mode if product exists, has a name, and not minimal add
   const prefilledBarcode = product?.id && !product.name; // Check if only barcode is prefilled
@@ -95,26 +95,38 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
     },
   });
 
-   // --- Camera Permission Effect ---
+   // --- Camera Permission Effect (Reused Logic) ---
    useEffect(() => {
     let stream: MediaStream | null = null;
+    let stopStream = () => {
+         if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+        }
+        if (videoRef.current) {
+           videoRef.current.srcObject = null;
+        }
+    }
     const getCameraPermission = async () => {
       if (!isOpen || !isScanning) {
-        setHasCameraPermission(null); // Reset when not scanning or dialog closed
-        if (videoRef.current && videoRef.current.srcObject) {
-            (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
-            videoRef.current.srcObject = null;
-          }
+        setHasCameraPermission(null);
+        stopStream();
         return;
       }
-       console.log("Requesting camera permission...");
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }); // Prefer rear camera
-         console.log("Camera permission granted.");
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         setHasCameraPermission(true);
-
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(playError => {
+             console.error("Error playing video:", playError);
+             setHasCameraPermission(false);
+             toast({ variant: 'destructive', title: 'Error de Cámara', description: 'No se pudo iniciar la cámara.'});
+             setIsScanning(false);
+          });
+        } else {
+             stopStream();
+             setIsScanning(false);
         }
       } catch (error) {
          console.error('Error accessing camera:', error);
@@ -124,91 +136,55 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
           title: 'Acceso a Cámara Denegado',
           description: 'Habilita los permisos de cámara en tu navegador para usar el escáner.',
         });
-        setIsScanning(false); // Stop scanning if permission denied
+        setIsScanning(false);
+        stopStream();
       }
     };
-
     getCameraPermission();
-
-     // Cleanup function to stop video stream
-     return () => {
-        if (stream) {
-            console.log("Stopping camera stream.");
-            stream.getTracks().forEach(track => track.stop());
-        }
-        if (videoRef.current) {
-           videoRef.current.srcObject = null;
-        }
-     };
+    return stopStream;
   }, [isOpen, isScanning, toast]);
 
 
-   // --- Barcode Scanning Logic ---
+   // --- Barcode Scanning Logic (Reused Logic) ---
+   const isBarcodeDetectorSupported = typeof window !== 'undefined' && 'BarcodeDetector' in window;
    useEffect(() => {
-      if (!isOpen || !isScanning || !hasCameraPermission || !videoRef.current || !('BarcodeDetector' in window)) {
-        return; // Exit if not ready or BarcodeDetector not supported
+      if (!isOpen || !isScanning || !hasCameraPermission || !videoRef.current || !isBarcodeDetectorSupported) {
+        return;
       }
-
-       console.log("Starting barcode detection...");
       let animationFrameId: number;
-       const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['aztec',
-    'code_128',
-    'code_39',
-    'code_93',
-    'data_matrix',
-    'ean_13',
-    'ean_8',
-    'itf',
-    'pdf417',
-    'qr_code',
-    'upc_a',
-    'upc_e'] }); // Add formats as needed
-
+       let isDetectionRunning = true;
+      const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['ean_13', 'upc_a', 'code_128', 'ean_8', 'itf', 'code_39', 'code_93'] });
 
       const detectBarcode = async () => {
-          if (!videoRef.current || !videoRef.current.srcObject || !isScanning) {
-             console.log("Detection stopped or video not ready.");
-             return;
-          }
-          // Check video readiness before detecting
+          if (!isDetectionRunning || !videoRef.current || !videoRef.current.srcObject || !isScanning) return;
            if (videoRef.current.readyState < videoRef.current.HAVE_METADATA || videoRef.current.videoWidth === 0) {
-             console.log("Video not ready for detection, retrying...");
-             animationFrameId = requestAnimationFrame(detectBarcode); // Retry detection
+             if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
              return;
            }
-
-
           try {
             const barcodes = await barcodeDetector.detect(videoRef.current);
-            if (barcodes.length > 0 && barcodes[0].rawValue) {
+            if (barcodes.length > 0 && barcodes[0].rawValue && isDetectionRunning) {
               console.log("Barcode detected:", barcodes[0].rawValue);
               form.setValue('id', barcodes[0].rawValue, { shouldValidate: true });
               setIsScanning(false); // Stop scanning after detection
+              isDetectionRunning = false;
               toast({ title: "Código Detectado", description: barcodes[0].rawValue });
-            } else {
-              // No barcode detected, continue scanning
+            } else if (isDetectionRunning) {
               animationFrameId = requestAnimationFrame(detectBarcode);
             }
           } catch (error) {
-             // Avoid logging the common InvalidStateError unless needed for debugging
              if (!(error instanceof DOMException && error.name === 'InvalidStateError')) {
                 console.error("Error detecting barcode:", error);
              }
-            // Don't stop scanning on error, just log it
-             animationFrameId = requestAnimationFrame(detectBarcode); // Try again
+             if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
           }
       };
-
-      // Start detection loop
-       animationFrameId = requestAnimationFrame(detectBarcode);
-
-      // Cleanup function to cancel the animation frame
+       if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
       return () => {
-         console.log("Stopping barcode detection loop.");
+         isDetectionRunning = false;
          cancelAnimationFrame(animationFrameId);
       };
-
-   }, [isOpen, isScanning, hasCameraPermission, form, toast]); // Add dependencies
+   }, [isOpen, isScanning, hasCameraPermission, form, toast, isBarcodeDetectorSupported]);
 
 
   // --- Form Reset Effect ---
@@ -358,11 +334,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
     mutation.mutate(values);
   };
 
-
-  // --- Check BarcodeDetector Support ---
-  const isBarcodeDetectorSupported = typeof window !== 'undefined' && 'BarcodeDetector' in window;
-
-  const toggleScan = () => {
+   const toggleScan = () => {
      if (!isBarcodeDetectorSupported) {
          toast({ title: "No Soportado", description: "El escáner de código de barras no es compatible con este navegador.", variant: "destructive" });
          return;
@@ -381,6 +353,7 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
+        {/* Scanner View */}
         {isScanning && (
             <div className="relative mb-4">
                 <video
@@ -556,7 +529,6 @@ const AddEditProductDialog: React.FC<AddEditProductDialogProps> = ({
 // Helper to check for BarcodeDetector support safely on the client
 if (typeof window !== 'undefined' && !('BarcodeDetector' in window)) {
   console.warn("Barcode Detector API is not supported in this browser.");
-  // Potentially load a polyfill here if desired
 }
 
 
