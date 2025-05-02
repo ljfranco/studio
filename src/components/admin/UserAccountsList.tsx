@@ -66,7 +66,7 @@ const UserAccountsList: React.FC = () => {
     }
 
     return (
-        <div className="space-y-4"> {/* Added a container div */}
+        <div className="space-y-4">
              <Link href="/admin" passHref>
                  <Button variant="outline">
                     <ArrowLeft className="mr-2 h-4 w-4" /> Volver al Panel
@@ -82,32 +82,34 @@ const UserAccountsList: React.FC = () => {
                     {accounts.length === 0 && !loadingData ? (
                         <p className="text-center text-muted-foreground">No hay usuarios registrados.</p>
                     ) : (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Nombre</TableHead>
-                                    <TableHead className="text-right">Saldo</TableHead>
-                                    <TableHead className="text-center">Ver Cuenta</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {accounts.map((account) => (
-                                    <TableRow key={account.id}>
-                                        <TableCell className="font-medium">{account.name}</TableCell>
-                                        <TableCell className={`text-right font-semibold ${account.balance < 0 ? 'text-destructive' : 'text-primary'}`}>
-                                            {formatCurrency(account.balance)}
-                                        </TableCell>
-                                        <TableCell className="text-center">
-                                            <Link href={`/admin/user/${account.id}`} passHref>
-                                                <Button variant="ghost" size="icon" aria-label={`Ver ${account.name}`}>
-                                                    <Eye className="h-4 w-4" />
-                                                </Button>
-                                            </Link>
-                                        </TableCell>
+                        <div className="overflow-x-auto"> {/* Added overflow-x-auto */}
+                             <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Nombre</TableHead>
+                                        <TableHead className="text-right">Saldo</TableHead>
+                                        <TableHead className="text-center">Ver Cuenta</TableHead>
                                     </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
+                                </TableHeader>
+                                <TableBody>
+                                    {accounts.map((account) => (
+                                        <TableRow key={account.id}>
+                                            <TableCell className="font-medium whitespace-nowrap">{account.name}</TableCell> {/* Added whitespace-nowrap */}
+                                            <TableCell className={`text-right font-semibold ${account.balance < 0 ? 'text-destructive' : 'text-primary'}`}>
+                                                {formatCurrency(account.balance)}
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <Link href={`/admin/user/${account.id}`} passHref>
+                                                    <Button variant="ghost" size="icon" aria-label={`Ver ${account.name}`}>
+                                                        <Eye className="h-4 w-4" />
+                                                    </Button>
+                                                </Link>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
                     )}
                 </CardContent>
             </Card>

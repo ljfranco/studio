@@ -359,10 +359,10 @@ const PurchaseForm: React.FC = () => {
                      </div>
                  )}
 
-                 {/* Product Search / Scan */}
-                <div className="flex flex-col sm:flex-row gap-2 items-end">
-                    {/* Search Combobox */}
-                    <div className="flex-grow">
+                 {/* Product Search / Scan & Quantity/Price Inputs */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                    {/* Search Combobox & Scan Button (larger width on medium screens) */}
+                    <div className="md:col-span-5">
                          <Label htmlFor="product-search">Producto</Label>
                          <div className="flex items-center gap-2">
                               <Combobox
@@ -406,7 +406,7 @@ const PurchaseForm: React.FC = () => {
                     </div>
 
                     {/* Quantity Input */}
-                    <div className="w-full sm:w-20">
+                    <div className="md:col-span-2">
                         <Label htmlFor="quantity">Cantidad</Label>
                         <Input
                             id="quantity"
@@ -421,7 +421,7 @@ const PurchaseForm: React.FC = () => {
                         />
                     </div>
                      {/* Purchase Price Input */}
-                     <div className="w-full sm:w-28">
+                     <div className="md:col-span-3">
                         <Label htmlFor="purchasePrice">Precio Costo</Label>
                         <Input
                             id="purchasePrice"
@@ -436,17 +436,19 @@ const PurchaseForm: React.FC = () => {
                     </div>
 
                      {/* Add Item Button */}
-                     <Button
-                        type="button"
-                        onClick={handleAddItem}
-                        disabled={!selectedProduct || !quantity || quantity <= 0 || !purchasePrice || isSubmitting} // Update disabled check
-                        className="w-full sm:w-auto shrink-0"
-                     >
-                        <PlusCircle className="mr-2 h-4 w-4" /> Agregar
-                    </Button>
+                     <div className="md:col-span-2">
+                         <Button
+                            type="button"
+                            onClick={handleAddItem}
+                            disabled={!selectedProduct || !quantity || quantity <= 0 || !purchasePrice || isSubmitting} // Update disabled check
+                            className="w-full"
+                         >
+                            <PlusCircle className="mr-2 h-4 w-4" /> Agregar
+                        </Button>
+                    </div>
                  </div>
                  {selectedProduct && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground mt-2">
                         Seleccionado: {selectedProduct.name} - Stock Actual: {selectedProduct.quantity ?? 0} - Ult. Compra: {formatCurrency(selectedProduct.lastPurchasePrice ?? 0)}
                     </p>
                 )}
@@ -454,21 +456,21 @@ const PurchaseForm: React.FC = () => {
 
              {/* Purchase Items List */}
              {purchaseItems.length > 0 && (
-                <div className="border rounded-md overflow-x-auto">
-                    <Table>
+                <div className="border rounded-md overflow-x-auto"> {/* Added overflow-x-auto */}
+                    <Table className="min-w-full"> {/* Added min-w-full */}
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Producto</TableHead>
-                                <TableHead className="text-center">Cantidad</TableHead>
-                                <TableHead className="text-right">Precio Costo</TableHead>
-                                <TableHead className="text-right">Total</TableHead>
+                                <TableHead className="min-w-[150px]">Producto</TableHead> {/* Added min-width */}
+                                <TableHead className="text-center min-w-[80px]">Cantidad</TableHead> {/* Added min-width */}
+                                <TableHead className="text-right min-w-[100px]">Precio Costo</TableHead> {/* Added min-width */}
+                                <TableHead className="text-right min-w-[110px]">Total</TableHead> {/* Added min-width */}
                                 <TableHead className="text-center">Quitar</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {purchaseItems.map((item) => (
                                 <TableRow key={item.productId}>
-                                    <TableCell className="font-medium">{item.productName}</TableCell>
+                                    <TableCell className="font-medium whitespace-nowrap">{item.productName}</TableCell> {/* Added whitespace-nowrap */}
                                     <TableCell className="text-center">{item.quantity}</TableCell>
                                     <TableCell className="text-right">{formatCurrency(item.purchasePrice)}</TableCell>
                                     <TableCell className="text-right font-semibold">{formatCurrency(item.totalCost)}</TableCell>
@@ -494,7 +496,7 @@ const PurchaseForm: React.FC = () => {
              {purchaseItems.length > 0 && (
                 <div className="flex flex-col items-end space-y-4 mt-4 sticky bottom-0 bg-background py-4 px-6 border-t">
                     <p className="text-xl font-bold">Total Ingreso: {formatCurrency(purchaseTotal)}</p>
-                    <div className='flex gap-2'>
+                    <div className='flex gap-2 flex-wrap justify-end'> {/* Added flex-wrap */}
                         <Button
                             variant="outline"
                             onClick={() => {

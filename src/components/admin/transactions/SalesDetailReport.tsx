@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -281,33 +282,35 @@ const SalesDetailReport: React.FC = () => {
                                             </div>
                                         </AccordionTrigger>
                                         <AccordionContent>
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                         <TableHead className="w-[110px]">Fecha</TableHead>
-                                                         <TableHead className="w-[80px]">Hora</TableHead>
-                                                         <TableHead>Descripción</TableHead>
-                                                         <TableHead className="text-right w-[100px]">Monto</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {group.sales.map((sale) => {
-                                                         const saleTimestamp = sale.timestamp instanceof Timestamp ? sale.timestamp.toDate() : new Date();
-                                                         return (
-                                                            <TableRow key={sale.id}>
-                                                                <TableCell className="text-xs text-muted-foreground">
-                                                                    {format(saleTimestamp, 'dd/MM/yyyy')}
-                                                                </TableCell>
-                                                                <TableCell className="text-xs text-muted-foreground">
-                                                                    {format(saleTimestamp, 'HH:mm:ss')}
-                                                                </TableCell>
-                                                                <TableCell>{sale.description}</TableCell>
-                                                                <TableCell className="text-right font-medium text-destructive">{formatCurrency(sale.amount)}</TableCell>
-                                                            </TableRow>
-                                                        );
-                                                    })}
-                                                </TableBody>
-                                            </Table>
+                                             <div className="overflow-x-auto"> {/* Added overflow-x-auto */}
+                                                 <Table className="min-w-full"> {/* Added min-w-full */}
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                             <TableHead className="min-w-[110px]">Fecha</TableHead> {/* Added min-width */}
+                                                             <TableHead className="min-w-[80px]">Hora</TableHead> {/* Added min-width */}
+                                                             <TableHead>Descripción</TableHead>
+                                                             <TableHead className="text-right min-w-[100px]">Monto</TableHead> {/* Added min-width */}
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {group.sales.map((sale) => {
+                                                             const saleTimestamp = sale.timestamp instanceof Timestamp ? sale.timestamp.toDate() : new Date();
+                                                             return (
+                                                                <TableRow key={sale.id}>
+                                                                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap"> {/* Added whitespace-nowrap */}
+                                                                        {format(saleTimestamp, 'dd/MM/yyyy')}
+                                                                    </TableCell>
+                                                                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap"> {/* Added whitespace-nowrap */}
+                                                                        {format(saleTimestamp, 'HH:mm:ss')}
+                                                                    </TableCell>
+                                                                    <TableCell className="whitespace-nowrap">{sale.description}</TableCell> {/* Added whitespace-nowrap */}
+                                                                    <TableCell className="text-right font-medium text-destructive">{formatCurrency(sale.amount)}</TableCell>
+                                                                </TableRow>
+                                                            );
+                                                        })}
+                                                    </TableBody>
+                                                </Table>
+                                             </div>
                                         </AccordionContent>
                                     </AccordionItem>
                                 ))}
@@ -347,5 +350,3 @@ const SalesDetailReport: React.FC = () => {
 // Export the fetchUserNames function if it's used elsewhere, otherwise keep it internal
 export { fetchUserNames };
 export default SalesDetailReport;
-
-    

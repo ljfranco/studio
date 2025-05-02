@@ -314,17 +314,17 @@ const DailySalesList: React.FC = () => {
             {sales.length === 0 && !loading ? (
                 <p className="text-center text-muted-foreground mt-6">No se registraron ventas hoy.</p>
              ) : (
-                <div className="overflow-x-auto border rounded-md">
-                    <Table>
+                <div className="overflow-x-auto border rounded-md"> {/* Added overflow-x-auto */}
+                    <Table className="min-w-full"> {/* Added min-w-full */}
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Hora</TableHead>
-                                <TableHead>Cliente</TableHead>
+                                <TableHead className="min-w-[100px]">Hora</TableHead> {/* Added min-width */}
+                                <TableHead className="min-w-[150px]">Cliente</TableHead> {/* Added min-width */}
                                 <TableHead>Descripción</TableHead>
-                                <TableHead className="text-right">Monto</TableHead>
+                                <TableHead className="text-right min-w-[100px]">Monto</TableHead> {/* Added min-width */}
                                 <TableHead className="text-center">Estado</TableHead>
                                 <TableHead className="text-center px-1">Detalle</TableHead>
-                                <TableHead className="text-center px-1">Acciones</TableHead>
+                                <TableHead className="text-center px-1 min-w-[100px]">Acciones</TableHead> {/* Added min-width */}
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -337,7 +337,7 @@ const DailySalesList: React.FC = () => {
                                 return (
                                     <TableRow key={sale.id} className={cn(isCancelled && "opacity-60")}>
                                         <TableCell className={cn("whitespace-nowrap text-xs", isCancelled && "line-through")}>{formattedTime}</TableCell>
-                                        <TableCell className={cn(isCancelled && "line-through")}>{customerName}</TableCell>
+                                        <TableCell className={cn("whitespace-nowrap", isCancelled && "line-through")}>{customerName}</TableCell> {/* Added whitespace-nowrap */}
                                         <TableCell className={cn(isCancelled && "line-through")}>{sale.description}</TableCell>
                                         <TableCell className={cn("text-right font-medium", isCancelled ? 'text-muted-foreground line-through' : 'text-destructive')}>
                                             {formatCurrency(sale.amount)}

@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react'; // Added useRef, useEffect
@@ -54,7 +55,7 @@ const fetchProducts = async (db: any): Promise<Product[]> => {
 const fetchDistributors = async (db: any): Promise<Distributor[]> => {
   const distributorsCol = collection(db, 'distributors');
   const snapshot = await getDocs(distributorsCol);
-  return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Distributor));
+  return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Distributor)).sort((a, b) => a.name.localeCompare(b.name)); // Sort distributors by name
 };
 
 const PriceListTable: React.FC = () => {
@@ -433,12 +434,12 @@ const PriceListTable: React.FC = () => {
                     {searchTerm ? 'No se encontraron productos.' : 'No hay productos para mostrar precios.'}
                 </p>
             ) : (
-            <div className="overflow-x-auto border rounded-md">
-                <Table className="min-w-full">
+            <div className="overflow-x-auto border rounded-md"> {/* Added overflow-x-auto */}
+                <Table className="min-w-full"> {/* Added min-w-full */}
                 <TableHeader>
                     <TableRow>
                     <TableHead className="sticky left-0 bg-card z-20 min-w-[150px] border-r">Producto</TableHead>
-                    <TableHead className="text-center sticky left-[150px] bg-card z-20 px-1 w-auto border-r"></TableHead>
+                    <TableHead className="text-center sticky left-[150px] bg-card z-20 px-1 w-[50px] border-r"></TableHead> {/* Adjusted width */}
                     <TableHead className="text-right min-w-[120px]">Últ. P. Compra</TableHead>
                     <TableHead className="text-right min-w-[100px]">Margen (%)</TableHead>
                     <TableHead className="text-right min-w-[120px]">P. Venta Sug.</TableHead>
@@ -455,7 +456,7 @@ const PriceListTable: React.FC = () => {
                         const suggestedPrice = calculateSuggestedPrice(product);
                         return (
                             <TableRow key={product.id} className="hover:bg-muted/50">
-                                <TableCell className="font-medium sticky left-0 bg-card z-10 border-r">
+                                <TableCell className="font-medium sticky left-0 bg-card z-10 border-r whitespace-nowrap"> {/* Added whitespace-nowrap */}
                                     <div className="flex flex-col">
                                         <span>{product.name}</span>
                                         <span className="text-xs text-muted-foreground font-mono">{product.id}</span>

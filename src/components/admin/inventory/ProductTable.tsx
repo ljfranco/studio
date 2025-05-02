@@ -281,23 +281,23 @@ const ProductTable: React.FC = () => {
              {searchTerm ? 'No se encontraron productos.' : 'No hay productos en el inventario.'}
             </p>
         ) : (
-          <div className="overflow-x-auto border rounded-md">
-            <Table>
+          <div className="overflow-x-auto border rounded-md"> {/* Added overflow-x-auto */}
+            <Table className="min-w-full"> {/* Added min-w-full */}
               <TableHeader>
                 <TableRow>
-                  <TableHead>Código Barras</TableHead>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead className="text-right">Cantidad</TableHead>
-                  <TableHead className="text-right">Últ. P. Compra</TableHead> {/* New Column */}
-                  <TableHead className="text-right">Precio Venta</TableHead>
-                  <TableHead className="text-center">Acciones</TableHead>
+                  <TableHead className="min-w-[120px]">Código Barras</TableHead> {/* Added min-width */}
+                  <TableHead className="min-w-[150px]">Nombre</TableHead> {/* Added min-width */}
+                  <TableHead className="text-right min-w-[80px]">Cantidad</TableHead> {/* Added min-width */}
+                  <TableHead className="text-right min-w-[120px]">Últ. P. Compra</TableHead> {/* New Column */}
+                  <TableHead className="text-right min-w-[120px]">Precio Venta</TableHead> {/* Added min-width */}
+                  <TableHead className="text-center min-w-[100px]">Acciones</TableHead> {/* Added min-width */}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredProducts.map((product) => (
                   <TableRow key={product.id}>
-                    <TableCell className="font-mono text-xs">{product.id}</TableCell>
-                    <TableCell className="font-medium">{product.name}</TableCell>
+                    <TableCell className="font-mono text-xs whitespace-nowrap">{product.id}</TableCell> {/* Added whitespace-nowrap */}
+                    <TableCell className="font-medium whitespace-nowrap">{product.name}</TableCell> {/* Added whitespace-nowrap */}
                     <TableCell className="text-right">{product.quantity ?? 0}</TableCell>
                     <TableCell className="text-right text-muted-foreground"> {/* New Cell */}
                         {formatCurrency(product.lastPurchasePrice ?? 0)}

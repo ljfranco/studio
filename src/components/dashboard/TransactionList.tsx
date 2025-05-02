@@ -80,19 +80,18 @@ const TransactionList: React.FC<TransactionListProps> = ({
   return (
       <>
        <TooltipProvider> {/* Required for Tooltip */}
-        <div className="overflow-x-auto">
-            <Table>
+        <div className="overflow-x-auto"> {/* Added overflow-x-auto */}
+            <Table className="min-w-full"> {/* Added min-w-full */}
             <TableHeader>
                 <TableRow>
-                <TableHead>Fecha</TableHead>
+                <TableHead className="min-w-[100px]">Fecha</TableHead> {/* Added min-width */}
                 {showUserName && <TableHead>Usuario</TableHead>}
                 <TableHead>Tipo</TableHead>
                 <TableHead>Descripción</TableHead>
-                <TableHead className="text-right">Monto</TableHead>
-                {/* Optional: Add column for Sale Detail icon */}
+                <TableHead className="text-right min-w-[100px]">Monto</TableHead> {/* Added min-width */}
                 <TableHead className="text-center w-auto px-1">Detalle</TableHead>
                 {isAdminView && <TableHead className="text-center w-auto px-1">Info</TableHead>}
-                {isAdminView && <TableHead className="text-center w-auto px-1">Acciones</TableHead>}
+                {isAdminView && <TableHead className="text-center w-auto px-1 min-w-[100px]">Acciones</TableHead>} {/* Added min-width */}
                 </TableRow>
             </TableHeader>
             <TableBody>
@@ -287,4 +286,3 @@ const TransactionList: React.FC<TransactionListProps> = ({
 };
 
 export default TransactionList;
-
