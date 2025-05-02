@@ -21,6 +21,7 @@ import AddEditDistributorDialog from './AddEditDistributorDialog'; // Import the
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"; // For delete confirmation
 import { useToast } from '@/hooks/use-toast';
 import type { Distributor } from '@/types/distributor';
+import { cn } from '@/lib/utils'; // Import cn
 
 // Fetch distributors function
 const fetchDistributors = async (db: any): Promise<Distributor[]> => {
@@ -113,24 +114,24 @@ const DistributorManagement: React.FC = () => {
         ) : distributors.length === 0 ? (
           <p className="text-center text-muted-foreground">No hay distribuidores registrados.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
+          <div className="overflow-x-auto"> {/* Added overflow-x-auto */}
+            <Table className="min-w-full"> {/* Added min-w-full */}
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Contacto</TableHead>
-                  <TableHead>Teléfono</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead className="text-center">Acciones</TableHead>
+                  <TableHead className="min-w-[150px]">Nombre</TableHead> {/* Added min-width */}
+                  <TableHead className="min-w-[150px]">Contacto</TableHead> {/* Added min-width */}
+                  <TableHead className="min-w-[120px]">Teléfono</TableHead> {/* Added min-width */}
+                  <TableHead className="min-w-[180px]">Email</TableHead> {/* Added min-width */}
+                  <TableHead className="text-center min-w-[100px]">Acciones</TableHead> {/* Added min-width */}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {distributors.map((dist) => (
                   <TableRow key={dist.id}>
-                    <TableCell className="font-medium">{dist.name}</TableCell>
-                    <TableCell>{dist.contactPerson || '-'}</TableCell>
-                    <TableCell>{dist.phone || '-'}</TableCell>
-                    <TableCell>{dist.email || '-'}</TableCell>
+                    <TableCell className="font-medium whitespace-nowrap">{dist.name}</TableCell> {/* Added whitespace-nowrap */}
+                    <TableCell className="whitespace-nowrap">{dist.contactPerson || '-'}</TableCell> {/* Added whitespace-nowrap */}
+                    <TableCell className="whitespace-nowrap">{dist.phone || '-'}</TableCell> {/* Added whitespace-nowrap */}
+                    <TableCell className="whitespace-nowrap">{dist.email || '-'}</TableCell> {/* Added whitespace-nowrap */}
                     <TableCell className="text-center space-x-1">
                       <Button
                         variant="ghost"

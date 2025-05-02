@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"; // Import DropdownMenu
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils'; // Import cn
 
 interface UserData {
   id: string;
@@ -166,32 +167,31 @@ const UserManagementTable: React.FC = () => {
           {users.length === 0 ? (
             <p className="text-center text-muted-foreground">No hay otros usuarios registrados.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
+            <div className="overflow-x-auto"> {/* Added overflow-x-auto */}
+              <Table className="min-w-full"> {/* Added min-w-full */}
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Dirección</TableHead>
-                    <TableHead>Teléfono</TableHead>
+                    <TableHead className="min-w-[150px]">Nombre</TableHead> {/* Added min-width */}
+                    <TableHead className="min-w-[200px]">Dirección</TableHead> {/* Added min-width */}
+                    <TableHead className="min-w-[120px]">Teléfono</TableHead> {/* Added min-width */}
                     <TableHead>Rol</TableHead>
                     <TableHead>Estado</TableHead>
-                    <TableHead className="text-center">Acciones</TableHead>
+                    <TableHead className="text-center min-w-[100px]">Acciones</TableHead> {/* Added min-width */}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {users.map((user) => (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.name}</TableCell>
-                      <TableCell>{user.address}</TableCell>
-                      <TableCell>{user.phone}</TableCell>
-                      {/* <TableCell>{user.email}</TableCell> */}
+                      <TableCell className="font-medium whitespace-nowrap">{user.name}</TableCell> {/* Added whitespace-nowrap */}
+                      <TableCell className="whitespace-nowrap">{user.address}</TableCell> {/* Added whitespace-nowrap */}
+                      <TableCell className="whitespace-nowrap">{user.phone}</TableCell> {/* Added whitespace-nowrap */}
                       <TableCell>
                          <Badge variant={user.role === 'admin' ? 'destructive' : 'secondary'} className="capitalize">
                             {user.role === 'admin' ? 'Admin' : 'Usuario'}
                          </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={user.isEnabled ? 'default' : 'outline'} className={user.isEnabled ? 'bg-green-600 text-white' : ''}>
+                        <Badge variant={user.isEnabled ? 'default' : 'outline'} className={cn(user.isEnabled ? 'bg-green-600 text-white' : '', "whitespace-nowrap")}> {/* Added whitespace-nowrap */}
                           {user.isEnabled ? 'Habilitado' : 'Deshabilitado'}
                         </Badge>
                       </TableCell>
@@ -269,7 +269,7 @@ const UserManagementTable: React.FC = () => {
             <AlertDialogAction
               onClick={handleToggleUserStatus}
               disabled={isUpdatingStatus}
-              className={actionType === 'disable' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : 'bg-green-600 text-white hover:bg-green-700'}
+              className={cn(actionType === 'disable' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : 'bg-green-600 text-white hover:bg-green-700')}
             >
               {isUpdatingStatus ? <LoadingSpinner size="sm" className="mr-2"/> : (actionType === 'disable' ? 'Sí, Deshabilitar' : 'Sí, Habilitar')}
             </AlertDialogAction>
