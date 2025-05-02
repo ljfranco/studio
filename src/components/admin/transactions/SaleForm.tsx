@@ -545,9 +545,10 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                      </div>
                  )}
 
-                 {/* Product Search / Scan */}
-                <div className="flex flex-col sm:flex-row gap-2 items-end">
-                    <div className="flex-grow">
+                 {/* Product Search / Scan & Quantity Inputs */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                     {/* Search Combobox & Scan Button (larger width on medium screens) */}
+                    <div className="md:col-span-7">
                          <Label htmlFor="product-search">Buscar Producto o Escanear</Label>
                          <div className="flex items-center gap-2">
                               <Combobox
@@ -590,7 +591,8 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                           )}
                     </div>
 
-                    <div className="w-full sm:w-auto">
+                     {/* Quantity Input */}
+                     <div className="md:col-span-2">
                         <Label htmlFor="quantity">Cantidad</Label>
                         <Input
                             id="quantity"
@@ -600,22 +602,25 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                             placeholder="Cant."
                             value={quantity}
                             onChange={(e) => setQuantity(e.target.value === '' ? '' : parseInt(e.target.value, 10) || '')}
-                            className="w-full sm:w-20 text-center"
+                            className="w-full text-center"
                             disabled={!selectedProduct || isSubmitting || !isCustomerSelected}
                         />
                     </div>
 
-                     <Button
-                        type="button"
-                        onClick={handleAddItem}
-                        disabled={!selectedProduct || !quantity || quantity <= 0 || isSubmitting || !isCustomerSelected}
-                        className="w-full sm:w-auto"
-                     >
-                        <PlusCircle className="mr-2 h-4 w-4" /> Agregar
-                    </Button>
+                     {/* Add Item Button */}
+                     <div className="md:col-span-3">
+                         <Button
+                            type="button"
+                            onClick={handleAddItem}
+                            disabled={!selectedProduct || !quantity || quantity <= 0 || isSubmitting || !isCustomerSelected}
+                            className="w-full"
+                         >
+                            <PlusCircle className="mr-2 h-4 w-4" /> Agregar
+                        </Button>
+                     </div>
                  </div>
                  {selectedProduct && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground mt-2">
                         Seleccionado: {selectedProduct.name} - Precio: {formatCurrency(selectedProduct.sellingPrice ?? 0)} - Stock: {selectedProduct.quantity ?? 0}
                     </p>
                 )}
@@ -624,21 +629,21 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
 
              {/* Sale Items List */}
              {saleItems.length > 0 && (
-                <div className="border rounded-md overflow-x-auto">
-                    <Table>
+                <div className="border rounded-md overflow-x-auto"> {/* Added overflow-x-auto */}
+                    <Table className="min-w-full"> {/* Added min-w-full */}
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Producto</TableHead>
-                                <TableHead className="text-center">Cantidad</TableHead>
-                                <TableHead className="text-right">Precio Unit.</TableHead>
-                                <TableHead className="text-right">Total</TableHead>
+                                <TableHead className="min-w-[150px]">Producto</TableHead> {/* Added min-width */}
+                                <TableHead className="text-center min-w-[80px]">Cantidad</TableHead> {/* Added min-width */}
+                                <TableHead className="text-right min-w-[100px]">Precio Unit.</TableHead> {/* Added min-width */}
+                                <TableHead className="text-right min-w-[110px]">Total</TableHead> {/* Added min-width */}
                                 <TableHead className="text-center">Quitar</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {saleItems.map((item) => (
                                 <TableRow key={item.productId}>
-                                    <TableCell className="font-medium">{item.productName}</TableCell>
+                                    <TableCell className="font-medium whitespace-nowrap">{item.productName}</TableCell> {/* Added whitespace-nowrap */}
                                     <TableCell className="text-center">{item.quantity}</TableCell>
                                     <TableCell className="text-right">{formatCurrency(item.unitPrice)}</TableCell>
                                     <TableCell className="text-right font-semibold">{formatCurrency(item.totalPrice)}</TableCell>
@@ -664,7 +669,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
              {saleItems.length > 0 && (
                 <div className="flex flex-col items-end space-y-4 mt-4 sticky bottom-0 bg-background py-4 px-6 border-t">
                     <p className="text-xl font-bold">Total Venta: {formatCurrency(saleTotal)}</p>
-                    <div className='flex gap-2'>
+                    <div className='flex gap-2 flex-wrap justify-end'> {/* Added flex-wrap */}
                          {!isEditMode && (
                             <Button
                                 variant="outline"
