@@ -90,7 +90,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
                 <TableHead>Descripción</TableHead>
                 <TableHead className="text-right min-w-[100px]">Monto</TableHead> {/* Added min-width */}
                 <TableHead className="text-center w-auto px-1">Detalle</TableHead>
-                {isAdminView && <TableHead className="text-center w-auto px-1">Info</TableHead>}
+                <TableHead className="text-center w-auto px-1">Info</TableHead>
                 {isAdminView && <TableHead className="text-center w-auto px-1 min-w-[100px]">Acciones</TableHead>} {/* Added min-width */}
                 </TableRow>
             </TableHeader>
@@ -144,7 +144,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
                         )}
                      </TableCell>
                     {/* Admin Info Popover */}
-                    {isAdminView && (
+                    {/* {isAdminView && ( */}
                         <TableCell className="text-center w-auto px-1">
                         {(transaction.isModified || transaction.isCancelled || transaction.isRestored) && ( // Check for restored as well
                             <Popover>
@@ -176,7 +176,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
                             </Popover>
                         )}
                         </TableCell>
-                    )}
+                    {/* )} */}
                     {/* Admin Actions */}
                     {isAdminView && (
                         <TableCell className="text-center w-auto px-1 space-x-0 sm:space-x-1"> {/* Adjust padding and spacing */}
