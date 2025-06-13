@@ -27,9 +27,9 @@ interface UserDetailViewProps {
 }
 
 interface UserData {
-    name: string;
-    email: string;
-    balance: number;
+  name: string;
+  email: string;
+  balance: number;
 }
 
 const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
@@ -86,9 +86,9 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
         timestamp: doc.data().timestamp // Keep as Timestamp or Date
       })) as Transaction[];
       setTransactions(fetchedTransactions.sort((a, b) => { // Sort DESC for display
-          const dateA = a.timestamp instanceof Timestamp ? a.timestamp.toDate() : a.timestamp;
-          const dateB = b.timestamp instanceof Timestamp ? b.timestamp.toDate() : b.timestamp;
-          return dateB.getTime() - dateA.getTime();
+        const dateA = a.timestamp instanceof Timestamp ? a.timestamp.toDate() : a.timestamp;
+        const dateB = b.timestamp instanceof Timestamp ? b.timestamp.toDate() : b.timestamp;
+        return dateB.getTime() - dateA.getTime();
       }));
       setLoadingData(false); // Set loading false after transactions are fetched
     }, (error) => {
@@ -105,106 +105,106 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
 
 
   // --- Recalculate Balance Logic ---
-   const recalculateBalance = useCallback(async (showToast: boolean = true) => {
-        if (!userId || !db || !adminUser || role !== 'admin') return;
+  const recalculateBalance = useCallback(async (showToast: boolean = true) => {
+    if (!userId || !db || !adminUser || role !== 'admin') return;
 
-        setIsRecalculating(true);
-        console.log(`Recalculating balance for user: ${userId}`);
+    setIsRecalculating(true);
+    console.log(`Recalculating balance for user: ${userId}`);
 
-        try {
-            // Fetch all transactions ordered chronologically
-            const transactionsColRef = collection(db, 'transactions');
-            const q = query(transactionsColRef, where('userId', '==', userId), orderBy('timestamp', 'asc'));
-            const querySnapshot = await getDocs(q); // Use getDocs for one-time fetch during recalculation
+    try {
+      // Fetch all transactions ordered chronologically
+      const transactionsColRef = collection(db, 'transactions');
+      const q = query(transactionsColRef, where('userId', '==', userId), orderBy('timestamp', 'asc'));
+      const querySnapshot = await getDocs(q); // Use getDocs for one-time fetch during recalculation
 
-            let currentBalance = 0;
-            const batch = writeBatch(db); // Use a batch for efficient updates
+      let currentBalance = 0;
+      const batch = writeBatch(db); // Use a batch for efficient updates
 
-            querySnapshot.forEach((docSnap) => {
-                const transaction = { id: docSnap.id, ...docSnap.data() } as Transaction;
-                let transactionAmount = 0;
+      querySnapshot.forEach((docSnap) => {
+        const transaction = { id: docSnap.id, ...docSnap.data() } as Transaction;
+        let transactionAmount = 0;
 
-                // Only include non-cancelled transactions in balance calculation
-                if (!transaction.isCancelled) {
-                     // Original amount stored is always positive
-                    transactionAmount = transaction.type === 'purchase' ? -transaction.amount : transaction.amount;
-                }
-
-                currentBalance += transactionAmount;
-
-                // Update the balanceAfter field in the transaction document if it changed
-                if (transaction.balanceAfter !== currentBalance) {
-                   console.log(`Updating transaction ${transaction.id}: Old BalanceAfter ${transaction.balanceAfter}, New BalanceAfter ${currentBalance}`);
-                   batch.update(docSnap.ref, { balanceAfter: currentBalance });
-                } else {
-                  console.log(`Transaction ${transaction.id} BalanceAfter is correct: ${currentBalance}`);
-                }
-            });
-
-             // Get the user document reference
-            const userDocRef = doc(db, 'users', userId);
-
-             // Read the user document to prevent overwriting other fields potentially
-             const userSnap = await getDoc(userDocRef); // Use getDoc for consistency
-             if (userSnap.exists() && userSnap.data().balance !== currentBalance) {
-                 console.log(`Final calculated balance: ${currentBalance}. Updating user document.`);
-                 batch.update(userDocRef, { balance: currentBalance });
-             } else if (!userSnap.exists()) {
-                 console.warn(`User document ${userId} not found during balance update.`);
-             } else {
-                 console.log(`User ${userId} balance is already correct: ${currentBalance}`);
-             }
-
-
-            // Commit the batch updates
-            await batch.commit();
-
-             if (showToast) {
-                toast({
-                    title: "Éxito",
-                    description: "Saldo y movimientos recalculados correctamente.",
-                });
-             }
-            console.log("Recalculation complete.");
-
-        } catch (error) {
-            console.error("Error recalculating balance:", error);
-             if (showToast) {
-                toast({
-                    title: "Error",
-                    description: `No se pudo recalcular el saldo. ${error instanceof Error ? error.message : String(error)}`,
-                    variant: "destructive",
-                });
-             }
-        } finally {
-            setIsRecalculating(false);
-            console.log("Recalculation finished (finally block).");
+        // Only include non-cancelled transactions in balance calculation
+        if (!transaction.isCancelled) {
+          // Original amount stored is always positive
+          transactionAmount = transaction.type === 'purchase' ? -transaction.amount : transaction.amount;
         }
-    }, [userId, db, toast, adminUser, role]);
+
+        currentBalance += transactionAmount;
+
+        // Update the balanceAfter field in the transaction document if it changed
+        if (transaction.balanceAfter !== currentBalance) {
+          console.log(`Updating transaction ${transaction.id}: Old BalanceAfter ${transaction.balanceAfter}, New BalanceAfter ${currentBalance}`);
+          batch.update(docSnap.ref, { balanceAfter: currentBalance });
+        } else {
+          console.log(`Transaction ${transaction.id} BalanceAfter is correct: ${currentBalance}`);
+        }
+      });
+
+      // Get the user document reference
+      const userDocRef = doc(db, 'users', userId);
+
+      // Read the user document to prevent overwriting other fields potentially
+      const userSnap = await getDoc(userDocRef); // Use getDoc for consistency
+      if (userSnap.exists() && userSnap.data().balance !== currentBalance) {
+        console.log(`Final calculated balance: ${currentBalance}. Updating user document.`);
+        batch.update(userDocRef, { balance: currentBalance });
+      } else if (!userSnap.exists()) {
+        console.warn(`User document ${userId} not found during balance update.`);
+      } else {
+        console.log(`User ${userId} balance is already correct: ${currentBalance}`);
+      }
+
+
+      // Commit the batch updates
+      await batch.commit();
+
+      if (showToast) {
+        toast({
+          title: "Éxito",
+          description: "Saldo y movimientos recalculados correctamente.",
+        });
+      }
+      console.log("Recalculation complete.");
+
+    } catch (error) {
+      console.error("Error recalculating balance:", error);
+      if (showToast) {
+        toast({
+          title: "Error",
+          description: `No se pudo recalcular el saldo. ${error instanceof Error ? error.message : String(error)}`,
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setIsRecalculating(false);
+      console.log("Recalculation finished (finally block).");
+    }
+  }, [userId, db, toast, adminUser, role]);
 
   // --- Action Handlers ---
   const handleEdit = (transaction: Transaction) => {
     // Check if it's a sale; if so, open the SaleForm dialog instead
     if (transaction.saleDetails && transaction.saleDetails.length > 0) {
-        handleEditSale(transaction);
+      handleEditSale(transaction);
     } else {
-        setSelectedTransaction(transaction);
-        setIsEditDialogOpen(true); // Open the standard edit dialog for non-sales
+      setSelectedTransaction(transaction);
+      setIsEditDialogOpen(true); // Open the standard edit dialog for non-sales
     }
   };
 
-   // Handler specifically for editing sales using SaleForm
-   const handleEditSale = (transaction: Transaction) => {
-        setSelectedTransaction(transaction);
-        setIsEditSaleDialogOpen(true);
-   };
+  // Handler specifically for editing sales using SaleForm
+  const handleEditSale = (transaction: Transaction) => {
+    setSelectedTransaction(transaction);
+    setIsEditSaleDialogOpen(true);
+  };
 
   const handleCancel = (transaction: Transaction) => {
     setSelectedTransaction(transaction);
     setIsCancelDialogOpen(true);
   };
 
-   const handleRestore = (transaction: Transaction) => {
+  const handleRestore = (transaction: Transaction) => {
     if (!transaction.isCancelled) return; // Should not happen if button is shown correctly
     setSelectedTransaction(transaction);
     setIsRestoreDialogOpen(true);
@@ -220,11 +220,11 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
     // Recalculation is now handled by the onSuccessCallback in the dialogs
   };
 
-   // Define a callback for dialogs to trigger recalculation without a toast
-   const handleActionSuccess = useCallback(() => {
-       console.log("Action successful, triggering recalculation without toast...");
-       recalculateBalance(false); // Pass false to suppress the toast
-   }, [recalculateBalance]);
+  // Define a callback for dialogs to trigger recalculation without a toast
+  const handleActionSuccess = useCallback(() => {
+    console.log("Action successful, triggering recalculation without toast...");
+    recalculateBalance(false); // Pass false to suppress the toast
+  }, [recalculateBalance]);
 
   // --- Render Logic ---
   if (authLoading || loadingData) {
@@ -236,31 +236,31 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
   }
 
   if (!userData) {
-     return (
-        <div className="text-center space-y-4">
-             <p className="text-destructive">No se encontró el usuario.</p>
-             <Link href="/admin/accounts" passHref> {/* Changed link to accounts page */}
-                 <Button variant="outline">
-                    <ArrowLeft className="mr-2 h-4 w-4" /> Volver al listado
-                 </Button>
-             </Link>
-        </div>
-     );
+    return (
+      <div className="text-center space-y-4">
+        <p className="text-destructive">No se encontró el usuario.</p>
+        <Link href="/admin/accounts" passHref> {/* Changed link to accounts page */}
+          <Button variant="outline">
+            <ArrowLeft className="mr-2 h-4 w-4" /> Volver al listado
+          </Button>
+        </Link>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
-        <div className="flex justify-between items-center mb-4">
-            <Link href="/admin/accounts" passHref> {/* Changed link to accounts page */}
-                <Button variant="outline">
-                <ArrowLeft className="mr-2 h-4 w-4" /> Volver al listado
-                </Button>
-            </Link>
-             <Button onClick={() => recalculateBalance(true)} variant="outline" disabled={isRecalculating}> {/* Explicitly pass true for manual recalc */}
-                {isRecalculating ? <LoadingSpinner size="sm" className="mr-2" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                Recalcular Saldo
-             </Button>
-        </div>
+      <div className="flex justify-between items-center mb-4">
+        <Link href="/admin/accounts" passHref> {/* Changed link to accounts page */}
+          <Button variant="outline">
+            <ArrowLeft className="mr-2 h-4 w-4" /> Volver al listado
+          </Button>
+        </Link>
+        <Button onClick={() => recalculateBalance(true)} variant="outline" disabled={isRecalculating}> {/* Explicitly pass true for manual recalc */}
+          {isRecalculating ? <LoadingSpinner size="sm" className="mr-2" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+          Recalcular Saldo
+        </Button>
+      </div>
 
 
       <Card className="shadow-md">
@@ -270,7 +270,7 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
         </CardHeader>
         <CardContent>
           <p className={`text-3xl font-bold ${userData.balance < 0 ? 'text-destructive' : 'text-primary'}`}>
-             Saldo: {formatCurrency(userData.balance)}
+            Saldo: {formatCurrency(userData.balance)}
           </p>
         </CardContent>
       </Card>
@@ -293,87 +293,87 @@ const UserDetailView: React.FC<UserDetailViewProps> = ({ userId }) => {
         </CardHeader>
         <CardContent>
           <TransactionList
-             transactions={transactions}
-             showUserName={false}
-             isAdminView={true} // Enable admin actions
-             onEdit={handleEdit} // Use the combined edit handler
-             onCancel={handleCancel}
-             onRestore={handleRestore} // Pass restore handler
+            transactions={transactions}
+            showUserName={false}
+            isAdminView={true} // Enable admin actions
+            onEdit={handleEdit} // Use the combined edit handler
+            onCancel={handleCancel}
+            onRestore={handleRestore} // Pass restore handler
           />
         </CardContent>
       </Card>
 
-       {/* Dialogs */}
-       {/* Add Transaction Dialogs (Purchase/Payment) */}
-       <AddTransactionDialog
-            isOpen={isAddPurchaseOpen}
-            onClose={() => { setIsAddPurchaseOpen(false); }}
-            type="purchase"
-            targetUserId={userId}
-            isAdminAction={true}
-            onSuccessCallback={handleActionSuccess} // Use success callback
-       />
-       <AddTransactionDialog
-            isOpen={isAddPaymentOpen}
-            onClose={() => { setIsAddPaymentOpen(false);}}
-            type="payment"
-            targetUserId={userId}
-            isAdminAction={true}
-            onSuccessCallback={handleActionSuccess} // Use success callback
-       />
+      {/* Dialogs */}
+      {/* Add Transaction Dialogs (Purchase/Payment) */}
+      <AddTransactionDialog
+        isOpen={isAddPurchaseOpen}
+        onClose={() => { setIsAddPurchaseOpen(false); }}
+        type="purchase"
+        targetUserId={userId}
+        isAdminAction={true}
+        onSuccessCallback={handleActionSuccess} // Use success callback
+      />
+      <AddTransactionDialog
+        isOpen={isAddPaymentOpen}
+        onClose={() => { setIsAddPaymentOpen(false); }}
+        type="payment"
+        targetUserId={userId}
+        isAdminAction={true}
+        onSuccessCallback={handleActionSuccess} // Use success callback
+      />
 
-       {/* Standard Edit/Cancel/Restore Dialogs (for non-sales) */}
-       {selectedTransaction && !selectedTransaction.saleDetails && (
+      {/* Standard Edit/Cancel/Restore Dialogs (for non-sales) */}
+      {selectedTransaction && !selectedTransaction.saleDetails && (
         <>
-            <EditTransactionDialog
-                isOpen={isEditDialogOpen}
-                onClose={handleDialogClose}
-                transaction={selectedTransaction}
-                adminUser={adminUser}
-                onSuccessCallback={handleActionSuccess} // Use success callback
-            />
+          <EditTransactionDialog
+            isOpen={isEditDialogOpen}
+            onClose={handleDialogClose}
+            transaction={selectedTransaction}
+            adminUser={adminUser}
+            onSuccessCallback={handleActionSuccess} // Use success callback
+          />
 
         </>
-       )}
-       {/* Cancel/Restore Dialogs (for all types) */}
-        {selectedTransaction && (
-            <>
-                <CancelTransactionDialog
-                    isOpen={isCancelDialogOpen}
-                    onClose={handleDialogClose}
-                    transaction={selectedTransaction}
-                    adminUser={adminUser}
-                    onSuccessCallback={handleActionSuccess} // Use success callback
-                />
-                <RestoreTransactionDialog
-                    isOpen={isRestoreDialogOpen}
-                    onClose={handleDialogClose}
-                    transaction={selectedTransaction}
-                    adminUser={adminUser}
-                    onSuccessCallback={handleActionSuccess} // Use success callback
-                />
-            </>
-        )}
+      )}
+      {/* Cancel/Restore Dialogs (for all types) */}
+      {selectedTransaction && (
+        <>
+          <CancelTransactionDialog
+            isOpen={isCancelDialogOpen}
+            onClose={handleDialogClose}
+            transaction={selectedTransaction}
+            adminUser={adminUser}
+            onSuccessCallback={handleActionSuccess} // Use success callback
+          />
+          <RestoreTransactionDialog
+            isOpen={isRestoreDialogOpen}
+            onClose={handleDialogClose}
+            transaction={selectedTransaction}
+            adminUser={adminUser}
+            onSuccessCallback={handleActionSuccess} // Use success callback
+          />
+        </>
+      )}
 
 
-        {/* Edit Sale Dialog (using SaleForm) */}
-        <Dialog open={isEditSaleDialogOpen} onOpenChange={(open) => { if (!open) handleDialogClose(); }}>
-            <DialogContent className="sm:max-w-4xl"> {/* Wider dialog for sale form */}
-                 <DialogHeader>
-                    <DialogTitle>Modificar Venta</DialogTitle>
-                    <DialogDescription>
-                        Modifica los productos o cantidades de esta venta. Se cancelará la venta original y se creará una nueva.
-                    </DialogDescription>
-                 </DialogHeader>
-                 {selectedTransaction && selectedTransaction.saleDetails && (
-                    <SaleForm
-                        saleToEdit={selectedTransaction}
-                        onClose={handleDialogClose}
-                        onSuccessCallback={handleActionSuccess}
-                    />
-                 )}
-            </DialogContent>
-        </Dialog>
+      {/* Edit Sale Dialog (using SaleForm) */}
+      <Dialog open={isEditSaleDialogOpen} onOpenChange={(open) => { if (!open) handleDialogClose(); }}>
+        <DialogContent className="sm:max-w-4xl"> {/* Wider dialog for sale form */}
+          <DialogHeader>
+            <DialogTitle>Modificar Venta</DialogTitle>
+            <DialogDescription>
+              Modifica los productos o cantidades de esta venta. Se cancelará la venta original y se creará una nueva.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedTransaction && selectedTransaction.saleDetails && (
+            <SaleForm
+              saleToEdit={selectedTransaction}
+              onClose={handleDialogClose}
+              onSuccessCallback={handleActionSuccess}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
 
     </div>
