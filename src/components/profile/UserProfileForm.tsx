@@ -31,6 +31,7 @@ const profileSchema = z.object({
   address: z.string().max(150, 'La dirección no puede exceder los 150 caracteres.').optional().or(z.literal('')),
   phone: z.string().max(30, 'El teléfono no puede exceder los 30 caracteres.').optional().or(z.literal('')),
   favorites: z.array(z.string()).optional(), // Array of functionality IDs
+  businessName: z.string().max(100).optional(),
 });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
@@ -59,8 +60,8 @@ const UserProfileForm: React.FC = () => {
   useEffect(() => {
     const fetchUserData = async () => {
       if (!user) {
-         setLoadingData(false);
-         return;
+        setLoadingData(false);
+        return;
       }
       setLoadingData(true);
       try {
@@ -75,14 +76,23 @@ const UserProfileForm: React.FC = () => {
             favorites: data.favorites || [], // Populate favorites from Firestore
           });
         } else {
-           form.reset({
-             name: user.displayName || '',
-             address: '',
-             phone: '',
-             favorites: [], // Default empty favorites
+          form.reset({
+            name: user.displayName || '',
+            address: '',
+            phone: '',
+            favorites: [], // Default empty favorites
           });
           console.warn("User document not found in Firestore for profile.");
         }
+        if (role === 'admin') {
+          const appSettingsRef = doc(db, 'appSettings', 'businessName');
+          const appSettingsSnap = await getDoc(appSettingsRef);
+          if (appSettingsSnap.exists()) {
+            const appSettingsData = appSettingsSnap.data();
+            form.setValue('businessName', appSettingsData.name || '');
+          }
+        }
+
       } catch (error) {
         console.error("Error fetching user profile data:", error);
         toast({
@@ -96,7 +106,7 @@ const UserProfileForm: React.FC = () => {
     };
 
     if (!authLoading) {
-         fetchUserData();
+      fetchUserData();
     }
     // Add currentFavorites to dependencies to react to external changes if needed
   }, [user, db, form, toast, authLoading, currentFavorites]);
@@ -116,30 +126,38 @@ const UserProfileForm: React.FC = () => {
         updatedAt: serverTimestamp(),
       };
 
-       // Remove null fields before updating
-       Object.keys(updateData).forEach(key => {
-            if ((updateData as any)[key] === null) {
-                delete (updateData as any)[key];
-            }
-       });
+      // Remove null fields before updating
+      Object.keys(updateData).forEach(key => {
+        if ((updateData as any)[key] === null) {
+          delete (updateData as any)[key];
+        }
+      });
 
 
       await updateDoc(userDocRef, updateData);
 
+      if (role === 'admin' && values.businessName?.trim()) {
+        const appSettingsRef = doc(db, 'appSettings', 'businessName');
+        await updateDoc(appSettingsRef, {
+          name: values.businessName.trim(),
+        });
+      }
+
+
       // Update Firebase Auth profile display name if it changed
       if (auth.currentUser && auth.currentUser.displayName !== values.name) {
-         await updateProfile(auth.currentUser, { displayName: values.name });
-          console.log("Auth profile display name updated.");
-          // Trigger a refresh of AuthContext data (implementation depends on AuthContext)
-          // For now, a page refresh might be needed or implement refresh in AuthContext
+        await updateProfile(auth.currentUser, { displayName: values.name });
+        console.log("Auth profile display name updated.");
+        // Trigger a refresh of AuthContext data (implementation depends on AuthContext)
+        // For now, a page refresh might be needed or implement refresh in AuthContext
       }
 
       toast({
         title: '¡Éxito!',
         description: 'Tu perfil ha sido actualizado.',
       });
-       // The AuthContext listener should now automatically pick up the changes in the user document (including favorites)
-       // and update the context state, causing the Navbar to re-render with the new favorites.
+      // The AuthContext listener should now automatically pick up the changes in the user document (including favorites)
+      // and update the context state, causing the Navbar to re-render with the new favorites.
 
     } catch (error) {
       console.error("Error updating profile:", error);
@@ -155,10 +173,10 @@ const UserProfileForm: React.FC = () => {
 
 
   if (authLoading || loadingData) {
-     return <div className="flex justify-center p-10"><LoadingSpinner /></div>;
+    return <div className="flex justify-center p-10"><LoadingSpinner /></div>;
   }
 
-   if (!user) {
+  if (!user) {
     return <p className="text-center text-destructive">Necesitas iniciar sesión para ver tu perfil.</p>;
   }
 
@@ -167,7 +185,7 @@ const UserProfileForm: React.FC = () => {
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         {/* Personal Info Fields */}
-         <FormField
+        <FormField
           control={form.control}
           name="name"
           render={({ field }) => (
@@ -180,14 +198,14 @@ const UserProfileForm: React.FC = () => {
             </FormItem>
           )}
         />
-         <FormItem>
-            <FormLabel>Correo Electrónico</FormLabel>
-            <FormControl>
-                 <Input type="email" value={user.email || ''} disabled readOnly className="bg-muted cursor-not-allowed"/>
-            </FormControl>
-             <p className="text-xs text-muted-foreground">El correo electrónico no se puede modificar.</p>
-         </FormItem>
-         <FormField
+        <FormItem>
+          <FormLabel>Correo Electrónico</FormLabel>
+          <FormControl>
+            <Input type="email" value={user.email || ''} disabled readOnly className="bg-muted cursor-not-allowed" />
+          </FormControl>
+          <p className="text-xs text-muted-foreground">El correo electrónico no se puede modificar.</p>
+        </FormItem>
+        <FormField
           control={form.control}
           name="address"
           render={({ field }) => (
@@ -200,79 +218,98 @@ const UserProfileForm: React.FC = () => {
             </FormItem>
           )}
         />
-         <FormField
+        <FormField
           control={form.control}
           name="phone"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Teléfono (Opcional)</FormLabel>
               <FormControl>
-                <Input placeholder="+54 9 11 12345678" {...field} value={field.value ?? ''}/>
+                <Input placeholder="+54 9 11 12345678" {...field} value={field.value ?? ''} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
 
-         <hr className="my-6" />
+        <hr className="my-6" />
 
-         {/* Favorite Functionalities Section */}
-          <div>
-            <h3 className="text-lg font-medium mb-3">Funcionalidades Favoritas</h3>
-            <p className="text-sm text-muted-foreground mb-4">Selecciona las funciones que usas con más frecuencia para un acceso rápido desde el menú.</p>
-             <FormField
-                control={form.control}
-                name="favorites"
-                render={() => (
-                    <FormItem className="space-y-3">
-                        {accessibleFunctionalities.map((item) => (
-                            <FormField
-                            key={item.id}
-                            control={form.control}
-                            name="favorites"
-                            render={({ field }) => {
-                                return (
-                                <FormItem
-                                    key={item.id}
-                                    className="flex flex-row items-center space-x-3 space-y-0 p-3 border rounded-md hover:bg-accent/50"
-                                >
-                                    <FormControl>
-                                    <Checkbox
-                                        checked={field.value?.includes(item.id)}
-                                        onCheckedChange={(checked) => {
-                                        return checked
-                                            ? field.onChange([...(field.value || []), item.id])
-                                            : field.onChange(
-                                                (field.value || []).filter(
-                                                (value) => value !== item.id
-                                                )
-                                            )
-                                        }}
-                                    />
-                                    </FormControl>
-                                     <div className='flex items-center gap-2'>
-                                         <item.icon className="h-4 w-4 text-muted-foreground"/>
-                                         <FormLabel className="font-normal cursor-pointer">
-                                            {item.name}
-                                         </FormLabel>
-                                     </div>
-                                </FormItem>
-                                )
-                            }}
+        {role === 'admin' && (
+          <FormField
+            control={form.control}
+            name="businessName"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Nombre del Negocio</FormLabel>
+                <FormControl>
+                  <Input placeholder="Ej: EasyManage" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+
+        <hr className="my-6" />
+
+        {/* Favorite Functionalities Section */}
+        <div>
+          <h3 className="text-lg font-medium mb-3">Funcionalidades Favoritas</h3>
+          <p className="text-sm text-muted-foreground mb-4">Selecciona las funciones que usas con más frecuencia para un acceso rápido desde el menú.</p>
+          <FormField
+            control={form.control}
+            name="favorites"
+            render={() => (
+              <FormItem className="space-y-3">
+                {accessibleFunctionalities.map((item) => (
+                  <FormField
+                    key={item.id}
+                    control={form.control}
+                    name="favorites"
+                    render={({ field }) => {
+                      return (
+                        <FormItem
+                          key={item.id}
+                          className="flex flex-row items-center space-x-3 space-y-0 p-3 border rounded-md hover:bg-accent/50"
+                        >
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value?.includes(item.id)}
+                              onCheckedChange={(checked) => {
+                                return checked
+                                  ? field.onChange([...(field.value || []), item.id])
+                                  : field.onChange(
+                                    (field.value || []).filter(
+                                      (value) => value !== item.id
+                                    )
+                                  )
+                              }}
                             />
-                        ))}
-                        <FormMessage />
-                    </FormItem>
-                )}
-                />
-          </div>
+                          </FormControl>
+                          <div className='flex items-center gap-2'>
+                            <item.icon className="h-4 w-4 text-muted-foreground" />
+                            <FormLabel className="font-normal cursor-pointer">
+                              {item.name}
+                            </FormLabel>
+                          </div>
+                        </FormItem>
+                      )
+                    }}
+                  />
+                ))}
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
 
 
         <div className="flex justify-end pt-4 border-t mt-6">
-            <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isLoading || loadingData}>
+          <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isLoading || loadingData}>
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             Guardar Cambios
-            </Button>
+          </Button>
         </div>
       </form>
     </Form>
