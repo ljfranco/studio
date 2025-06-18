@@ -1,0 +1,26 @@
+{
+  "name": "Easy Manage",
+  "short_name": "EasyManage",
+  "theme_color": "#333333",
+  "background_color": "#09090b",
+  "start_url": "/",
+  "id": "EasyManage",
+  "display": "standalone",
+  "description": "Easy Manage PWA te ayudara con la gestion de tu comercio. transacciones, inventario, entre otras funcionalidades.",
+  "icons": [
+    {
+      "purpose": "any",
+      "sizes": "2560x256",
+      "src": "icon.png",
+      "type": "image/png"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshot1.png",
+      "type": "image/png",
+      "sizes": "1080x1920",
+      "form_factor": "narrow"
+    }
+  ]
+}
