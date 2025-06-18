@@ -6,6 +6,7 @@ import { FirebaseProvider } from '@/context/FirebaseContext';
 import ReactQueryProvider from '@/context/ReactQueryProvider';
 import AuthProvider from '@/context/AuthContext';
 import { Navbar } from '@/components/layout/Navbar';
+import { Footer } from '@/components/layout/Footer';
 import { ThemeProvider } from '@/components/layout/ThemeProvider'; // Import ThemeProvider
 
 // Initialize the Inter font
@@ -42,10 +43,11 @@ export default function RootLayout({
                 <AuthProvider> {/* Wrap with AuthProvider */}
                 <div className="flex flex-col min-h-screen">
                     <Navbar />
-                    <main className="flex-grow container mx-auto px-4 py-8">
+                    <main className="flex-grow container mx-auto px-4 pt-8 py-16">
                     {children}
                     </main>
                     <Toaster />
+                    <Footer />
                 </div>
                 </AuthProvider>
             </FirebaseProvider>
