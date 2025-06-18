@@ -172,7 +172,7 @@ export const Navbar: React.FC = () => {
                             ) : (
                                 <Link href="/" passHref>
                                     <Button variant="outline" size="sm">
-                                        <User className="mr-2 h-4 w-4" />
+                                        <User className="h-4 w-4" />
                                         <span className="hidden md:inline">Ingresar / Registrarse</span>
                                     </Button>
                                 </Link>
