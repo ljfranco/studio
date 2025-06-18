@@ -17,9 +17,27 @@
   ],
   "screenshots": [
     {
-      "src": "screenshot1.png",
+      "src": "Login.png",
       "type": "image/png",
-      "sizes": "1080x1920",
+      "sizes": "800x600",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "AdminPanel.png",
+      "type": "image/png",
+      "sizes": "800x600",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "Inventory.png",
+      "type": "image/png",
+      "sizes": "800x600",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "Statement.png",
+      "type": "image/png",
+      "sizes": "800x600",
       "form_factor": "narrow"
     }
   ]
