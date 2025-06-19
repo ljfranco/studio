@@ -19,22 +19,22 @@ import { DollarSign, User, Loader2 } from 'lucide-react';
 import type { User as AuthUser } from 'firebase/auth';
 import type { UserData } from '@/types/user';
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
+    Form,
+    FormControl,
+    FormField,
+    FormItem,
+    FormLabel,
+    FormMessage,
 } from "@/components/ui/form";
 
 // Schema for collection form validation
 const collectionSchema = z.object({
-  userId: z.string().min(1, { message: 'Debes seleccionar un cliente.' }),
-  amount: z.preprocess(
-    (val) => Number(String(val).replace(/[^0-9.]+/g, "")), // Clean input
-    z.number().positive({ message: 'El monto debe ser un número positivo.' })
-  ),
-  description: z.string().max(100, { message: 'La descripción no puede exceder los 100 caracteres.' }).optional(),
+    userId: z.string().min(1, { message: 'Debes seleccionar un cliente.' }),
+    amount: z.preprocess(
+        (val) => Number(String(val).replace(/[^0-9.]+/g, "")), // Clean input
+        z.number().positive({ message: 'El monto debe ser un número positivo.' })
+    ),
+    description: z.string().max(100, { message: 'La descripción no puede exceder los 100 caracteres.' }).optional(),
 });
 
 type CollectionFormValues = z.infer<typeof collectionSchema>;
@@ -118,11 +118,27 @@ const CollectionForm: React.FC = () => {
         },
     });
 
+    const currentSelectedUserId = form.watch('userId');
+
     // --- Data Fetching ---
     const { data: users = [], isLoading: isLoadingUsers, error: errorUsers } = useQuery<UserData[]>({
         queryKey: ['collectionUsers'], // Distinct query key
         queryFn: () => fetchUsersForCollection(db),
         staleTime: 1000 * 60 * 5, // Cache users for 5 minutes
+        enabled: !!db, // Only run if db is available
+    });
+
+    // Fetch user balance specifically for the selected user
+    const { data: currentUserBalance, isLoading: isLoadingBalance } = useQuery<number | undefined>({
+        queryKey: ['userBalance', currentSelectedUserId],
+        queryFn: async () => {
+            if (!db || !currentSelectedUserId) return undefined;
+            const userDocRef = doc(db, 'users', currentSelectedUserId);
+            const userSnap = await getDoc(userDocRef);
+            return userSnap.exists() ? (userSnap.data() as UserData).balance : undefined;
+        },
+        enabled: !!db && !!currentSelectedUserId, // Only run if db and a userId are selected
+        staleTime: 0, // Always refetch to get the latest balance after a collection
     });
 
     // --- Mutation for adding collection ---
@@ -139,44 +155,49 @@ const CollectionForm: React.FC = () => {
             const newTransactionRef = doc(transactionsColRef); // Generate ID beforehand
 
             await runTransaction(db, async (dbTransaction) => {
-                 // Read user doc within transaction to be safe
-                 const userDocRef = doc(db, 'users', userId);
-                 const userSnap = await dbTransaction.get(userDocRef);
-                 if (!userSnap.exists()) {
-                     throw new Error(`El usuario ${userId} no existe.`);
-                 }
+                // Read user doc within transaction to be safe
+                const userDocRef = doc(db, 'users', userId);
+                const userSnap = await dbTransaction.get(userDocRef);
+                if (!userSnap.exists()) {
+                    throw new Error(`El usuario ${userId} no existe.`);
+                }
 
-                 dbTransaction.set(newTransactionRef, { // Use the generated ref
-                     userId: userId,
-                     type: 'payment',
-                     description: description,
-                     amount: amount,
-                     balanceAfter: 0, // Placeholder, will be updated by recalculation
-                     timestamp: Timestamp.now(),
-                     addedBy: adminUser.uid,
-                     addedByName: adminUser.displayName || adminUser.email,
-                     isAdminAction: true,
-                     isCancelled: false,
-                     isModified: false,
-                 });
+                dbTransaction.set(newTransactionRef, { // Use the generated ref
+                    userId: userId,
+                    type: 'payment',
+                    description: description,
+                    amount: amount,
+                    balanceAfter: 0, // Placeholder, will be updated by recalculation
+                    timestamp: Timestamp.now(),
+                    addedBy: adminUser.uid,
+                    addedByName: adminUser.displayName || adminUser.email,
+                    isAdminAction: true,
+                    isCancelled: false,
+                    isModified: false,
+                });
             });
 
 
             return userId; // Return userId for recalculation
         },
-        onSuccess: (userId) => {
+        onSuccess: async (userId) => {
             toast({
                 title: '¡Éxito!',
                 description: `Cobranza registrada correctamente para ${users.find(u => u.id === userId)?.name}. Recalculando saldo...`,
             });
             // Trigger balance recalculation for the specific user
-            recalculateBalance(userId, db, adminUser, role, toast);
+            await recalculateBalance(userId, db, adminUser, role, toast);
 
             queryClient.invalidateQueries({ queryKey: ['transactions', userId] });
             queryClient.invalidateQueries({ queryKey: ['userBalance', userId] });
             queryClient.invalidateQueries({ queryKey: ['collectionUsers'] }); // Refetch users in case needed elsewhere
 
-            form.reset(); // Reset form after successful submission
+            form.reset({
+                userId: userId,
+                amount: '' as any,
+                description: '',
+            }); // Parcial Reset form after successful submission
+
         },
         onError: (error) => {
             console.error("Error adding collection:", error);
@@ -239,8 +260,8 @@ const CollectionForm: React.FC = () => {
                     )}
                 />
 
-                 {/* Amount */}
-                 <FormField
+                {/* Amount */}
+                <FormField
                     control={form.control}
                     name="amount"
                     render={({ field }) => (
@@ -254,8 +275,8 @@ const CollectionForm: React.FC = () => {
                     )}
                 />
 
-                 {/* Optional Description */}
-                 <FormField
+                {/* Optional Description */}
+                <FormField
                     control={form.control}
                     name="description"
                     render={({ field }) => (
@@ -269,8 +290,13 @@ const CollectionForm: React.FC = () => {
                     )}
                 />
 
+                {/* TODO display balance of the selected customer  */}
 
-                 {/* Submit Button */}
+                <p className={`text-3xl font-bold ${(currentUserBalance ?? 0) < 0 ? 'text-destructive' : 'text-primary'}`}>
+                    Saldo: {formatCurrency(currentUserBalance ?? 0)}
+                </p>
+
+                {/* Submit Button */}
                 <div className="flex justify-end pt-4">
                     <Button type="submit" disabled={isSubmitting || users.length === 0} size="lg">
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DollarSign className="mr-2 h-4 w-4" />}
