@@ -29,28 +29,24 @@
       "src": "/screenshots/Login.png",
       "type": "image/png",
       "sizes": "800x600",
-      "form_factor": "narrow",
       "label": "Pantalla de inicio de sesión"
     },
     {
       "src": "/screenshots/AdminPanel.png",
       "type": "image/png",
       "sizes": "800x600",
-      "form_factor": "wide",
       "label": "Panel de administración"
     },
     {
       "src": "/screenshots/Inventory.png",
       "type": "image/png",
       "sizes": "800x600",
-      "form_factor": "wide",
       "label": "Gestión de inventario"
     },
     {
       "src": "/screenshots/Statement.png",
       "type": "image/png",
       "sizes": "800x600",
-      "form_factor": "wide",
       "label": "Estados de cuenta"
     }
   ]
