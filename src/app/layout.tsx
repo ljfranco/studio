@@ -18,6 +18,12 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'EasyManage', // Updated title
   description: 'Gestiona tu estado de cuenta de forma sencilla.', // Consider updating description later if needed
+  manifest: '/manifest.json',
+  themeColor: '#00b3b3',
+  icons: {
+    icon: '/assets/icon192.png',
+    apple: '/assets/icon512.png',
+  },
 };
 
 export default function RootLayout({
