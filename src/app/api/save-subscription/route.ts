@@ -14,5 +14,8 @@ export async function POST(req: Request) {
     createdAt: new Date(),
   });
 
-  return new Response('Subscription saved', { status: 201 });
+  return new Response('Subscription saved', {
+    status: 201,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
