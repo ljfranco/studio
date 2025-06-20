@@ -27,7 +27,7 @@ const AdminDashboard: React.FC = () => {
     const adminSections = [
         { title: 'Gestionar Usuarios', href: '/admin/users', icon: Users, description: 'Administrar roles y datos de usuarios.' },
         { title: 'Estados de Cuenta', href: '/admin/accounts', icon: ListChecks, description: 'Ver y gestionar saldos de clientes.' },
-        { title: 'Inventario Productos', href: '/admin/inventory', icon: Package, description: 'Gestionar stock y precios.' },
+        { title: 'Inventario Productos', href: '/admin/inventory', icon: Package, description: 'Gestionar stock, precios y Proveedores.' },
         { title: 'Registrar Transacciones', href: '/admin/transactions', icon: FileText, description: 'Ingresar ventas, compras o cobros.' },
         { title: 'Detalle de Ventas', href: '/admin/sales-detail', icon: Receipt, description: 'Ver resumen de ventas por fecha.' }, // Updated Title and href
         // Future sections can be added here
