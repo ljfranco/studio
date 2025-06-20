@@ -1,9 +1,11 @@
 import type { NextConfig } from 'next';
-const withPWA = require('next-pwa')({
-  dest: 'public',
-  register: true,
-  skipWaiting: true,
-  disable: process.env.NODE_ENV === 'development', // PWA solo en producción
+import withSerwistInit from "@serwist/next";
+
+const withSerwist = withSerwistInit({
+  // Note: This is only an example. If you use Pages Router,
+  // use something else that works, such as "service-worker/index.ts".
+  swSrc: "src/sw.ts",
+  swDest: "public/sw.js",
 });
 
 const nextConfig: NextConfig = {
@@ -29,5 +31,5 @@ const nextConfig: NextConfig = {
   // }
 };
 
-module.exports = withPWA(nextConfig);
+export default withSerwist(nextConfig);
 

@@ -6,7 +6,7 @@
   "start_url": "/",
   "id": "EasyManage",
   "display": "standalone",
-  "description": "Easy Manage PWA te ayudara con la gestion de tu comercio. transacciones, inventario, entre otras funcionalidades.",
+  "description": "Easy Manage te ayudara con la gestion de tu comercio. transacciones, inventario, entre otras funcionalidades.",
   "icons": [
     {
       "src": "/assets/icon192.png",
