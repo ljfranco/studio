@@ -32,7 +32,7 @@ self.addEventListener('push', (event) => {
             self.registration.showNotification(data.title, {
                 body: data.body,
                 icon: '/assets/icon192.png', // asegurate de tener este ícono en public/
-                badge: '/assets/icon192.png', // opcional, también en public/
+                badge: '/assets/icon72.png', // opcional, también en public/
             })
         );
     }
