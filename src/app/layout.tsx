@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
@@ -15,15 +15,49 @@ const inter = Inter({
   subsets: ['latin'],
 });
 
+const APP_NAME = "EasyManage";
+const APP_DEFAULT_TITLE = "Easy Manage";
+const APP_TITLE_TEMPLATE = "%s - PWA App";
+const APP_DESCRIPTION = "Easy Manage te ayudara con la gestion de tu comercio. transacciones, inventario, entre otras funcionalidades.";
+
 export const metadata: Metadata = {
-  title: 'EasyManage', // Updated title
-  description: 'Gestiona tu estado de cuenta de forma sencilla.', // Consider updating description later if needed
-  manifest: '/manifest.json',
-  themeColor: '#00b3b3',
-  icons: {
-    icon: '/assets/icon192.png',
-    apple: '/assets/icon512.png',
+  applicationName: APP_NAME,
+  title: {
+    default: APP_DEFAULT_TITLE,
+    template: APP_TITLE_TEMPLATE,
   },
+  description: APP_DESCRIPTION,
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: APP_DEFAULT_TITLE,
+    // startUpImage: [],
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  openGraph: {
+    type: "website",
+    siteName: APP_NAME,
+    title: {
+      default: APP_DEFAULT_TITLE,
+      template: APP_TITLE_TEMPLATE,
+    },
+    description: APP_DESCRIPTION,
+  },
+  twitter: {
+    card: "summary",
+    title: {
+      default: APP_DEFAULT_TITLE,
+      template: APP_TITLE_TEMPLATE,
+    },
+    description: APP_DESCRIPTION,
+  },
+};
+
+export const viewport: Viewport = {
+themeColor: '#00b3b3',
 };
 
 export default function RootLayout({

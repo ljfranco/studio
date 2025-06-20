@@ -7,9 +7,13 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Users, ListChecks, Package, FileText, LineChart, Receipt } from 'lucide-react'; // Added Receipt icon
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { useAdminPushSubscription } from '@/hooks/useAdminPushSubscription';
+import { AdminNotificationForm } from '../admin/AdminNotificationForm';
 
 const AdminDashboard: React.FC = () => {
     const { user, loading: authLoading, role } = useAuth();
+
+    useAdminPushSubscription();
 
     if (authLoading) {
         return <div className="flex justify-center items-center h-[calc(100vh-10rem)]"><LoadingSpinner size="lg" /></div>;
@@ -53,6 +57,15 @@ const AdminDashboard: React.FC = () => {
                             </Link>
                         ))}
                     </div>
+                </CardContent>
+            </Card>
+            <Card className="shadow-md">
+                <CardHeader>
+                    <CardTitle>Notificaciones Push</CardTitle>
+                    <CardDescription>Envía una notificación a todos los dispositivos suscritos.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <AdminNotificationForm />
                 </CardContent>
             </Card>
         </div>
