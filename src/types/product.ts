@@ -10,6 +10,7 @@ export interface Product {
   id: string; // Corresponds to barcode
   name: string;
   quantity: number;
+  minStock: number;
   sellingPrice: number;
   lastPurchasePrice?: number; // New: Store the last purchase price
   margin?: number; // New: Store the profit margin percentage
