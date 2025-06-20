@@ -23,6 +23,8 @@ import type { Transaction, SaleDetail } from '@/types/transaction';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 // Removed direct import of UserDetailView's recalculateBalance
 import AddEditProductDialog from '../inventory/AddEditProductDialog'; // Import AddEditProductDialog
+import { sendStockAlert } from '@/lib/notifications';
+import { se } from 'date-fns/locale';
 
 // Special ID for the generic customer - Changed from reserved name
 const CONSUMIDOR_FINAL_ID = 'consumidor-final-id'; // Changed ID
@@ -37,24 +39,24 @@ const fetchUsers = async (db: any): Promise<UserData[]> => {
         .map(doc => ({ id: doc.id, ...doc.data() } as UserData))
         .filter(user => user.id !== CONSUMIDOR_FINAL_ID);
 
-     // Ensure generic user exists and add to the beginning
-     const genericUserDocRef = doc(db, 'users', CONSUMIDOR_FINAL_ID);
-     const genericDocSnap = await getDoc(genericUserDocRef);
-     if (!genericDocSnap.exists()) {
+    // Ensure generic user exists and add to the beginning
+    const genericUserDocRef = doc(db, 'users', CONSUMIDOR_FINAL_ID);
+    const genericDocSnap = await getDoc(genericUserDocRef);
+    if (!genericDocSnap.exists()) {
         try {
             await setDoc(genericUserDocRef, {
-                 name: CONSUMIDOR_FINAL_NAME,
-                 role: 'user',
-                 balance: 0,
-                 isEnabled: true,
-                 createdAt: Timestamp.now(),
-                 isGeneric: true,
+                name: CONSUMIDOR_FINAL_NAME,
+                role: 'user',
+                balance: 0,
+                isEnabled: true,
+                createdAt: Timestamp.now(),
+                isGeneric: true,
             });
             console.log("Created generic consumer document.");
         } catch (error) {
-             console.error("Failed to create generic consumer document:", error);
+            console.error("Failed to create generic consumer document:", error);
         }
-     }
+    }
     users.unshift({ id: CONSUMIDOR_FINAL_ID, name: CONSUMIDOR_FINAL_NAME, email: '', balance: 0, isEnabled: true, role: 'user', isGeneric: true });
 
 
@@ -104,11 +106,11 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
             setSelectedUserId(saleToEdit.userId);
             setSaleItems(saleToEdit.saleDetails || []);
         } else {
-             setSelectedUserId('');
-             setSaleItems([]);
-             setSelectedProduct(null);
-             setSearchText('');
-             setQuantity('');
+            setSelectedUserId('');
+            setSaleItems([]);
+            setSelectedProduct(null);
+            setSearchText('');
+            setQuantity('');
         }
     }, [isEditMode, saleToEdit]);
 
@@ -127,137 +129,137 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
     const isLoading = isLoadingUsers || isLoadingProducts;
     const error = errorUsers || errorProducts;
 
-     // --- Product Search ---
-     const productOptions = useMemo(() => {
+    // --- Product Search ---
+    const productOptions = useMemo(() => {
         if (!products) return [];
         return products.map(p => ({ value: p.id, label: `${p.name} (${p.id})` }));
-     }, [products]);
+    }, [products]);
 
-     const filteredProductOptions = useMemo(() => {
+    const filteredProductOptions = useMemo(() => {
         if (!searchText) return productOptions;
         return productOptions.filter(option =>
-          option.label.toLowerCase().includes(searchText.toLowerCase())
+            option.label.toLowerCase().includes(searchText.toLowerCase())
         );
-     }, [searchText, productOptions]);
+    }, [searchText, productOptions]);
 
-     const handleProductSelect = (barcode: string) => {
+    const handleProductSelect = (barcode: string) => {
         const product = products.find(p => p.id === barcode);
         setSelectedProduct(product || null);
         setSearchText(product ? `${product.name} (${product.id})` : '');
         setQuantity('');
-     };
+    };
 
 
-     // --- Barcode Scanning ---
-     const isBarcodeDetectorSupported = typeof window !== 'undefined' && 'BarcodeDetector' in window;
+    // --- Barcode Scanning ---
+    const isBarcodeDetectorSupported = typeof window !== 'undefined' && 'BarcodeDetector' in window;
 
-      useEffect(() => {
+    useEffect(() => {
         let stream: MediaStream | null = null;
         let stopStream = () => {
-             if (stream) {
+            if (stream) {
                 stream.getTracks().forEach(track => track.stop());
                 stream = null;
             }
             if (videoRef.current) {
-               videoRef.current.srcObject = null;
+                videoRef.current.srcObject = null;
             }
         }
         const getCameraPermission = async () => {
-          if (!isScanning) {
-            setHasCameraPermission(null);
-            stopStream();
-            return;
-          }
-          try {
-            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-            setHasCameraPermission(true);
-            if (videoRef.current) {
-                 videoRef.current.srcObject = stream;
-                 videoRef.current.play().catch(playError => {
-                     console.error("Error playing video:", playError);
-                     setHasCameraPermission(false);
-                     toast({ variant: 'destructive', title: 'Error de Cámara', description: 'No se pudo iniciar la cámara.'});
-                     setIsScanning(false);
-                 });
-            } else {
-                 stopStream();
-                 setIsScanning(false);
+            if (!isScanning) {
+                setHasCameraPermission(null);
+                stopStream();
+                return;
             }
-          } catch (err) {
-            console.error('Error accessing camera:', err);
-            setHasCameraPermission(false);
-            toast({ variant: 'destructive', title: 'Acceso a Cámara Denegado' });
-            setIsScanning(false);
-            stopStream();
-          }
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                setHasCameraPermission(true);
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    videoRef.current.play().catch(playError => {
+                        console.error("Error playing video:", playError);
+                        setHasCameraPermission(false);
+                        toast({ variant: 'destructive', title: 'Error de Cámara', description: 'No se pudo iniciar la cámara.' });
+                        setIsScanning(false);
+                    });
+                } else {
+                    stopStream();
+                    setIsScanning(false);
+                }
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                setHasCameraPermission(false);
+                toast({ variant: 'destructive', title: 'Acceso a Cámara Denegado' });
+                setIsScanning(false);
+                stopStream();
+            }
         };
         getCameraPermission();
         return stopStream;
-      }, [isScanning, toast]);
+    }, [isScanning, toast]);
 
-      useEffect(() => {
-          if (!isScanning || !hasCameraPermission || !videoRef.current || !isBarcodeDetectorSupported) return;
+    useEffect(() => {
+        if (!isScanning || !hasCameraPermission || !videoRef.current || !isBarcodeDetectorSupported) return;
 
-          let animationFrameId: number;
-          let isDetectionRunning = true;
-          const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['ean_13', 'upc_a', 'code_128', 'ean_8', 'itf', 'code_39', 'code_93'] });
+        let animationFrameId: number;
+        let isDetectionRunning = true;
+        const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['ean_13', 'upc_a', 'code_128', 'ean_8', 'itf', 'code_39', 'code_93'] });
 
-          const detectBarcode = async () => {
-              if (!isDetectionRunning || !videoRef.current || !videoRef.current.srcObject || !isScanning) return;
-               if (videoRef.current.readyState < videoRef.current.HAVE_METADATA || videoRef.current.videoWidth === 0) {
-                   if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
-                   return;
-               }
-              try {
+        const detectBarcode = async () => {
+            if (!isDetectionRunning || !videoRef.current || !videoRef.current.srcObject || !isScanning) return;
+            if (videoRef.current.readyState < videoRef.current.HAVE_METADATA || videoRef.current.videoWidth === 0) {
+                if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
+                return;
+            }
+            try {
                 const barcodes = await barcodeDetector.detect(videoRef.current);
                 if (barcodes.length > 0 && barcodes[0].rawValue && isDetectionRunning) {
-                  const scannedId = barcodes[0].rawValue;
-                  console.log("Barcode detected:", scannedId);
-                  const product = products.find(p => p.id === scannedId);
-                  setIsScanning(false);
-                  isDetectionRunning = false;
+                    const scannedId = barcodes[0].rawValue;
+                    console.log("Barcode detected:", scannedId);
+                    const product = products.find(p => p.id === scannedId);
+                    setIsScanning(false);
+                    isDetectionRunning = false;
 
-                  if (product) {
-                      setSelectedProduct(product);
-                       setSearchText(`${product.name} (${product.id})`);
-                       setQuantity('');
-                      toast({ title: "Código Detectado", description: `${product.name}` });
-                  } else {
-                       // If product not found, open Add Product dialog
-                       setBarcodeToAdd(scannedId);
-                       setIsAddProductDialogOpen(true);
-                       toast({ title: "Producto no encontrado", description: `Código: ${scannedId}. Agrega el nuevo producto.`, variant: "default", duration: 5000 });
-                  }
+                    if (product) {
+                        setSelectedProduct(product);
+                        setSearchText(`${product.name} (${product.id})`);
+                        setQuantity('');
+                        toast({ title: "Código Detectado", description: `${product.name}` });
+                    } else {
+                        // If product not found, open Add Product dialog
+                        setBarcodeToAdd(scannedId);
+                        setIsAddProductDialogOpen(true);
+                        toast({ title: "Producto no encontrado", description: `Código: ${scannedId}. Agrega el nuevo producto.`, variant: "default", duration: 5000 });
+                    }
                 } else if (isDetectionRunning) {
-                  animationFrameId = requestAnimationFrame(detectBarcode);
+                    animationFrameId = requestAnimationFrame(detectBarcode);
                 }
-              } catch (error) {
-                 if (!(error instanceof DOMException && error.name === 'InvalidStateError')) {
+            } catch (error) {
+                if (!(error instanceof DOMException && error.name === 'InvalidStateError')) {
                     console.error("Error detecting barcode:", error);
-                 }
-                 if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
-              }
-          };
-           if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
-           return () => {
-               isDetectionRunning = false;
-               cancelAnimationFrame(animationFrameId);
-           };
-       }, [isScanning, hasCameraPermission, products, toast, isBarcodeDetectorSupported]);
+                }
+                if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
+            }
+        };
+        if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
+        return () => {
+            isDetectionRunning = false;
+            cancelAnimationFrame(animationFrameId);
+        };
+    }, [isScanning, hasCameraPermission, products, toast, isBarcodeDetectorSupported]);
 
 
-       const toggleScan = () => {
-         if (!isBarcodeDetectorSupported) {
-             toast({ title: "No Soportado", description: "El escáner no es compatible.", variant: "destructive" });
-             return;
-         }
-         setIsScanning(prev => !prev);
-         if (!isScanning) {
-              setSelectedProduct(null);
-              setSearchText('');
-              setQuantity('');
-          }
-       };
+    const toggleScan = () => {
+        if (!isBarcodeDetectorSupported) {
+            toast({ title: "No Soportado", description: "El escáner no es compatible.", variant: "destructive" });
+            return;
+        }
+        setIsScanning(prev => !prev);
+        if (!isScanning) {
+            setSelectedProduct(null);
+            setSearchText('');
+            setQuantity('');
+        }
+    };
 
 
     // --- Sale Item Management ---
@@ -268,8 +270,8 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
             return;
         }
         if (!isCustomerSelected) {
-             toast({ title: 'Error', description: 'Debes seleccionar un cliente primero.', variant: 'destructive' });
-             return;
+            toast({ title: 'Error', description: 'Debes seleccionar un cliente primero.', variant: 'destructive' });
+            return;
         }
 
         const currentStock = selectedProduct.quantity ?? 0;
@@ -277,7 +279,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
         const currentQuantityInCart = existingItem?.quantity ?? 0;
 
         if (currentQuantityInCart + currentQuantity > currentStock) {
-             toast({
+            toast({
                 title: 'Stock Insuficiente',
                 description: `Stock total: ${currentStock}. En carrito: ${currentQuantityInCart}. Intentas agregar: ${currentQuantity}.`,
                 variant: 'destructive',
@@ -339,6 +341,8 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
         setIsSubmitting(true);
 
         try {
+            const productUnderMinStock: { name: string, stock: number }[] = [];
+
             await runTransaction(db, async (transaction) => {
                 const timestamp = Timestamp.now();
                 const originalSaleId = isEditMode ? saleToEdit?.id : null;
@@ -390,7 +394,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                     const netChange = stockAdjustments.get(item.productId)!;
 
                     if (currentQuantity + netChange < 0) {
-                         throw new Error(`Stock insuficiente para ${item.productName}. Disponible: ${currentQuantity}, Cambio Neto Requerido: ${netChange}`);
+                        throw new Error(`Stock insuficiente para ${item.productName}. Disponible: ${currentQuantity}, Cambio Neto Requerido: ${netChange}`);
                     }
                 }
 
@@ -429,12 +433,28 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                             const newQuantity = currentQuantity + quantityChange;
                             console.log(`Product ${productId}: Current ${currentQuantity}, Change ${quantityChange}, New ${newQuantity}`);
                             transaction.update(productInfo.ref, { quantity: newQuantity });
+
+                            if (newQuantity <= (productInfo.data?.minStock ?? 0)) {
+                                productUnderMinStock.push({
+                                    name: productInfo.data?.name || 'Desconocido',
+                                    stock: newQuantity,
+                                });
+                            }
                         } else {
                             console.warn(`Product info not found for ${productId} during stock update write.`);
                         }
                     }
                 }
             });
+
+
+            //Push Notifications for low stock products
+            if (productUnderMinStock.length > 0) {
+                for (const product of productUnderMinStock) {
+                    await sendStockAlert(product)
+                };
+            }
+
 
             onSuccessCallback?.();
 
@@ -457,7 +477,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
             queryClient.invalidateQueries({ queryKey: ['saleUsers'] });
 
             if (isEditMode && onClose) {
-                 onClose();
+                onClose();
             }
 
         } catch (error) {
@@ -472,20 +492,20 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
         }
     };
 
-     // --- Handler for when a new product is added via the dialog ---
-     const handleProductAdded = useCallback((newProduct: Product) => {
-         // Refetch products to include the new one in the list immediately
-         queryClient.refetchQueries({ queryKey: ['products'] });
+    // --- Handler for when a new product is added via the dialog ---
+    const handleProductAdded = useCallback((newProduct: Product) => {
+        // Refetch products to include the new one in the list immediately
+        queryClient.refetchQueries({ queryKey: ['products'] });
 
-         // Automatically select the newly added product
-         if (newProduct) {
+        // Automatically select the newly added product
+        if (newProduct) {
             setSelectedProduct(newProduct);
             setSearchText(`${newProduct.name} (${newProduct.id})`);
             setQuantity(''); // Reset quantity
-         }
+        }
 
-         setBarcodeToAdd(null); // Clear the barcode to add state
-     }, [queryClient]); // Dependencies
+        setBarcodeToAdd(null); // Clear the barcode to add state
+    }, [queryClient]); // Dependencies
 
 
     // --- Render Logic ---
@@ -494,8 +514,8 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
 
     return (
         <div className="space-y-6 overflow-y-auto">
-             {/* Customer Selection */}
-             <div>
+            {/* Customer Selection */}
+            <div>
                 <Label htmlFor="customer-select">Cliente</Label>
                 <Select
                     value={selectedUserId}
@@ -515,43 +535,43 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                 </Select>
                 {isEditMode && <p className="text-xs text-muted-foreground mt-1">Cliente no editable al modificar una venta.</p>}
                 {!isEditMode && saleItems.length > 0 && <p className="text-xs text-muted-foreground mt-1">Cliente bloqueado hasta finalizar o cancelar la venta actual.</p>}
-             </div>
+            </div>
 
-             {/* Add Product Section */}
+            {/* Add Product Section */}
             <div className={cn(
-                 "border p-4 rounded-md space-y-4 bg-secondary/50 transition-opacity",
-                 !isCustomerSelected && "opacity-50 pointer-events-none"
-                )}>
-                 <h3 className="text-lg font-medium mb-2">Agregar Producto</h3>
-                 {!isCustomerSelected && (
-                     <div className="flex items-center text-sm text-orange-600 bg-orange-100 p-2 rounded-md border border-orange-300">
-                         <AlertCircle className="h-4 w-4 mr-2 shrink-0" />
-                         <span>Selecciona un cliente para agregar productos.</span>
-                     </div>
-                 )}
+                "border p-4 rounded-md space-y-4 bg-secondary/50 transition-opacity",
+                !isCustomerSelected && "opacity-50 pointer-events-none"
+            )}>
+                <h3 className="text-lg font-medium mb-2">Agregar Producto</h3>
+                {!isCustomerSelected && (
+                    <div className="flex items-center text-sm text-orange-600 bg-orange-100 p-2 rounded-md border border-orange-300">
+                        <AlertCircle className="h-4 w-4 mr-2 shrink-0" />
+                        <span>Selecciona un cliente para agregar productos.</span>
+                    </div>
+                )}
 
-                  {/* Scanner View */}
-                 {isScanning && (
-                     <div className="relative mb-4">
-                         <video ref={videoRef} className={cn("w-full max-w-sm mx-auto aspect-video rounded-md bg-muted", hasCameraPermission === false && "hidden")} autoPlay muted playsInline />
-                         <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full pointer-events-none" />
-                         <div className="absolute top-1/2 left-1/2 w-3/4 h-0.5 bg-red-500 animate-pulse -translate-x-1/2 -translate-y-1/2" /> {/* Centered Scan Line */}
-                         {hasCameraPermission === null && !videoRef.current?.srcObject && (
-                             <div className="absolute inset-0 flex items-center justify-center bg-muted rounded-md"><LoadingSpinner /><p className="ml-2 text-sm text-muted-foreground">Iniciando...</p></div>
-                         )}
-                         {hasCameraPermission === false && (
-                             <Alert variant="destructive" className="mt-2"><Camera className="h-4 w-4" /><AlertTitle>Permiso Requerido</AlertTitle><AlertDescription>Permite el acceso a la cámara.</AlertDescription></Alert>
-                         )}
-                     </div>
-                 )}
+                {/* Scanner View */}
+                {isScanning && (
+                    <div className="relative mb-4">
+                        <video ref={videoRef} className={cn("w-full max-w-sm mx-auto aspect-video rounded-md bg-muted", hasCameraPermission === false && "hidden")} autoPlay muted playsInline />
+                        <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full pointer-events-none" />
+                        <div className="absolute top-1/2 left-1/2 w-3/4 h-0.5 bg-red-500 animate-pulse -translate-x-1/2 -translate-y-1/2" /> {/* Centered Scan Line */}
+                        {hasCameraPermission === null && !videoRef.current?.srcObject && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-muted rounded-md"><LoadingSpinner /><p className="ml-2 text-sm text-muted-foreground">Iniciando...</p></div>
+                        )}
+                        {hasCameraPermission === false && (
+                            <Alert variant="destructive" className="mt-2"><Camera className="h-4 w-4" /><AlertTitle>Permiso Requerido</AlertTitle><AlertDescription>Permite el acceso a la cámara.</AlertDescription></Alert>
+                        )}
+                    </div>
+                )}
 
-                 {/* Product Search / Scan & Quantity Inputs */}
+                {/* Product Search / Scan & Quantity Inputs */}
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                     {/* Search Combobox & Scan Button (larger width on medium screens) */}
+                    {/* Search Combobox & Scan Button (larger width on medium screens) */}
                     <div className="md:col-span-7">
-                         <Label htmlFor="product-search">Buscar Producto o Escanear</Label>
-                         <div className="flex items-center gap-2">
-                              <Combobox
+                        <Label htmlFor="product-search">Buscar Producto o Escanear</Label>
+                        <div className="flex items-center gap-2">
+                            <Combobox
                                 options={filteredProductOptions}
                                 value={selectedProduct?.id ?? ''}
                                 onSelect={handleProductSelect}
@@ -562,8 +582,8 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                                 setSearchText={setSearchText}
                                 disabled={isScanning || isSubmitting || !isCustomerSelected}
                                 triggerId="product-search"
-                              />
-                             <Button
+                            />
+                            <Button
                                 type="button"
                                 variant="outline"
                                 size="icon"
@@ -574,12 +594,12 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                             >
                                 <ScanLine className="h-5 w-5" />
                             </Button>
-                         </div>
-                          {!isBarcodeDetectorSupported && (
+                        </div>
+                        {!isBarcodeDetectorSupported && (
                             <p className="text-xs text-destructive mt-1">Escáner no compatible.</p>
                         )}
                         {/* Button to add new product if not found */}
-                         {searchText && !selectedProduct && filteredProductOptions.length === 0 && !isLoadingProducts && !isScanning && (
+                        {searchText && !selectedProduct && filteredProductOptions.length === 0 && !isLoadingProducts && !isScanning && (
                             <Button
                                 type="button"
                                 variant="link"
@@ -588,11 +608,11 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                             >
                                 ¿Producto no encontrado? Agrégalo aquí.
                             </Button>
-                          )}
+                        )}
                     </div>
 
-                     {/* Quantity Input */}
-                     <div className="md:col-span-2">
+                    {/* Quantity Input */}
+                    <div className="md:col-span-2">
                         <Label htmlFor="quantity">Cantidad</Label>
                         <Input
                             id="quantity"
@@ -607,19 +627,19 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                         />
                     </div>
 
-                     {/* Add Item Button */}
-                     <div className="md:col-span-3">
-                         <Button
+                    {/* Add Item Button */}
+                    <div className="md:col-span-3">
+                        <Button
                             type="button"
                             onClick={handleAddItem}
                             disabled={!selectedProduct || !quantity || quantity <= 0 || isSubmitting || !isCustomerSelected}
                             className="w-full"
-                         >
+                        >
                             <PlusCircle className="mr-2 h-4 w-4" /> Agregar
                         </Button>
-                     </div>
-                 </div>
-                 {selectedProduct && (
+                    </div>
+                </div>
+                {selectedProduct && (
                     <p className="text-xs text-muted-foreground mt-2">
                         Seleccionado: {selectedProduct.name} - Precio: {formatCurrency(selectedProduct.sellingPrice ?? 0)} - Stock: {selectedProduct.quantity ?? 0}
                     </p>
@@ -627,8 +647,8 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
 
             </div>
 
-             {/* Sale Items List */}
-             {saleItems.length > 0 && (
+            {/* Sale Items List */}
+            {saleItems.length > 0 && (
                 <div className="border rounded-md overflow-x-auto"> {/* Added overflow-x-auto */}
                     <Table className="min-w-full"> {/* Added min-w-full */}
                         <TableHeader>
@@ -663,14 +683,14 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                         </TableBody>
                     </Table>
                 </div>
-             )}
+            )}
 
-             {/* Total and Submit */}
-             {saleItems.length > 0 && (
+            {/* Total and Submit */}
+            {saleItems.length > 0 && (
                 <div className="flex flex-col items-end space-y-4 mt-4 sticky bottom-0 bg-background py-4 px-6 border-t">
                     <p className="text-xl font-bold">Total Venta: {formatCurrency(saleTotal)}</p>
                     <div className='flex gap-2 flex-wrap justify-end'> {/* Added flex-wrap */}
-                         {!isEditMode && (
+                        {!isEditMode && (
                             <Button
                                 variant="outline"
                                 onClick={() => {
@@ -681,8 +701,8 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                             >
                                 Cancelar Venta Actual
                             </Button>
-                         )}
-                          {isEditMode && onClose && (
+                        )}
+                        {isEditMode && onClose && (
                             <Button
                                 variant="outline"
                                 onClick={onClose}
@@ -690,7 +710,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                             >
                                 Cancelar Modificación
                             </Button>
-                          )}
+                        )}
                         <Button
                             onClick={handleSubmitSale}
                             disabled={isSubmitting || saleItems.length === 0 || !selectedUserId}
@@ -703,10 +723,10 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                         </Button>
                     </div>
                 </div>
-             )}
+            )}
 
-             {/* Add Product Dialog - Triggered when barcode not found or button clicked */}
-              <AddEditProductDialog
+            {/* Add Product Dialog - Triggered when barcode not found or button clicked */}
+            <AddEditProductDialog
                 isOpen={isAddProductDialogOpen}
                 onClose={() => {
                     setIsAddProductDialogOpen(false);
