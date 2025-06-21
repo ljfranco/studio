@@ -8,7 +8,6 @@ import Link from 'next/link';
 import { Users, ListChecks, Package, FileText, LineChart, Receipt } from 'lucide-react'; // Added Receipt icon
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useAdminPushSubscription } from '@/hooks/useAdminPushSubscription';
-import { AdminNotificationForm } from '../admin/AdminNotificationForm';
 
 const AdminDashboard: React.FC = () => {
     const { user, loading: authLoading, role } = useAuth();
