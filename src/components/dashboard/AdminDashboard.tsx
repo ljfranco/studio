@@ -59,15 +59,6 @@ const AdminDashboard: React.FC = () => {
                     </div>
                 </CardContent>
             </Card>
-            <Card className="shadow-md">
-                <CardHeader>
-                    <CardTitle>Notificaciones Push</CardTitle>
-                    <CardDescription>Envía una notificación a todos los dispositivos suscritos.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <AdminNotificationForm />
-                </CardContent>
-            </Card>
         </div>
     );
 };
