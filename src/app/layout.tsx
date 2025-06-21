@@ -57,7 +57,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-themeColor: '#00b3b3',
+  themeColor: '#00b3b3',
 };
 
 export default function RootLayout({
@@ -71,28 +71,28 @@ export default function RootLayout({
     <html>
       {/* Apply the font variable to the body */}
       <body className={`${inter.variable} antialiased`}>
-         {/* Wrap everything with ThemeProvider */}
+        {/* Wrap everything with ThemeProvider */}
         <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <ReactQueryProvider>
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <ReactQueryProvider>
             <FirebaseProvider>
-                <AuthProvider> {/* Wrap with AuthProvider */}
+              <AuthProvider> {/* Wrap with AuthProvider */}
                 <div className="flex flex-col min-h-screen">
-                    <Navbar />
-                    <main className="flex-grow container mx-auto px-4 pt-8 py-16">
+                  <Navbar />
+                  <main className="flex-grow container mx-auto px-4 pt-8 py-16">
                     {children}
-                    </main>
-                    <Toaster />
-                    <Footer />
+                  </main>
+                  <Toaster />
+                  <Footer />
                 </div>
-                </AuthProvider>
+              </AuthProvider>
             </FirebaseProvider>
-            </ReactQueryProvider>
-         </ThemeProvider>
+          </ReactQueryProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
