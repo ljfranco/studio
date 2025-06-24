@@ -7,7 +7,7 @@ import * as z from 'zod';
 import { useAuth } from '@/context/AuthContext';
 import { useFirebase } from '@/context/FirebaseContext';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { updateProfile } from 'firebase/auth';
+import {  updateProfile } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox'; // Import Checkbox
@@ -24,6 +24,7 @@ import {
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import type { UserData } from '@/types/user';
 import { getAccessibleFunctionalities, AppFunctionality } from '@/lib/functionalities'; // Import functionalities and helper
+import { reauthenticateAndUpdatePassword } from '@/lib/firebaseAuthHelpers';
 
 // Schema for profile update validation including favorites
 const profileSchema = z.object({
@@ -32,7 +33,17 @@ const profileSchema = z.object({
   phone: z.string().max(30, 'El teléfono no puede exceder los 30 caracteres.').optional().or(z.literal('')),
   favorites: z.array(z.string()).optional(), // Array of functionality IDs
   businessName: z.string().max(100).optional(),
-});
+  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres.').optional(),
+  confirmPassword: z.string().optional(),
+  currentPassword: z.string().min(6, 'Ingresá tu contraseña actual para cambiarla.').optional(),
+}).refine((data) => !data.password || data.password === data.confirmPassword, {
+  message: "Las contraseñas no coinciden.",
+  path: ["confirmPassword"],
+})
+  .refine((data) => !data.password || data.currentPassword, {
+    message: "Debes ingresar tu contraseña actual para cambiarla.",
+    path: ["currentPassword"],
+  });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
@@ -132,6 +143,30 @@ const UserProfileForm: React.FC = () => {
           delete (updateData as any)[key];
         }
       });
+
+      // Cambiar la contraseña si se proporcionó una nueva
+      if (values.password && auth.currentUser) {
+        try {
+          await reauthenticateAndUpdatePassword(
+            auth.currentUser,
+            values.currentPassword!,
+            values.password
+          );
+          toast({
+            title: 'Contraseña actualizada',
+            description: 'Tu contraseña se ha cambiado exitosamente.',
+          });
+        } catch (error: any) {
+          console.error("Error cambiando contraseña:", error);
+          toast({
+            title: 'Error al cambiar la contraseña',
+            description: error.message || 'Verifica tu contraseña actual.',
+            variant: 'destructive',
+          });
+          return; // Para no continuar con otros cambios si falla
+        }
+      }
+
 
 
       await updateDoc(userDocRef, updateData);
@@ -304,6 +339,49 @@ const UserProfileForm: React.FC = () => {
           />
         </div>
 
+        <hr className="my-6" />
+
+        <FormField
+          control={form.control}
+          name="currentPassword"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Contraseña Actual</FormLabel>
+              <FormControl>
+                <Input type="password" placeholder="********" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <h3 className="text-lg font-medium mb-3">Cambiar Contraseña</h3>
+        <FormField
+          control={form.control}
+          name="password"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Nueva Contraseña</FormLabel>
+              <FormControl>
+                <Input type="password" placeholder="********" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="confirmPassword"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Confirmar Contraseña</FormLabel>
+              <FormControl>
+                <Input type="password" placeholder="********" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         <div className="flex justify-end pt-4 border-t mt-6">
           <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isLoading || loadingData}>
