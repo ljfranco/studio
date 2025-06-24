@@ -21,6 +21,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { sendPasswordReset } from '@/lib/firebaseAuthHelpers';
 
 const signInSchema = z.object({
   email: z.string().email({ message: 'Correo electrónico inválido.' }),
@@ -48,20 +49,20 @@ const SignInForm: React.FC = () => {
       const userCredential = await signInWithEmailAndPassword(auth, values.email, values.password);
       const user = userCredential.user;
 
-       // **Check if user is enabled in Firestore**
+      // **Check if user is enabled in Firestore**
       const userDocRef = doc(db, 'users', user.uid);
       const userDocSnap = await getDoc(userDocRef);
 
       if (userDocSnap.exists() && userDocSnap.data()?.isEnabled === false) {
-         // User exists but is disabled
-         await auth.signOut(); // Sign the user out immediately
-         toast({
-            title: 'Acceso Denegado',
-            description: 'Tu cuenta ha sido deshabilitada por un administrador.',
-            variant: 'destructive',
-         });
-         setIsLoading(false); // Set loading false explicitly
-         return; // Stop further execution
+        // User exists but is disabled
+        await auth.signOut(); // Sign the user out immediately
+        toast({
+          title: 'Acceso Denegado',
+          description: 'Tu cuenta ha sido deshabilitada por un administrador.',
+          variant: 'destructive',
+        });
+        setIsLoading(false); // Set loading false explicitly
+        return; // Stop further execution
       }
 
       // If enabled or doc doesn't exist (should not happen with current signup flow)
@@ -69,19 +70,19 @@ const SignInForm: React.FC = () => {
         title: '¡Éxito!',
         description: 'Has ingresado correctamente.',
       });
-       setIsLoading(false); // Set loading false on success
+      setIsLoading(false); // Set loading false on success
 
     } catch (error: any) {
       console.error("Sign in error:", error);
       let errorMessage = 'Error al ingresar. Verifica tus credenciales.';
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-          errorMessage = 'Correo electrónico o contraseña incorrectos.';
+        errorMessage = 'Correo electrónico o contraseña incorrectos.';
       } else if (error.code === 'auth/invalid-email') {
-          errorMessage = 'El formato del correo electrónico no es válido.';
+        errorMessage = 'El formato del correo electrónico no es válido.';
       } else if (error.code === 'auth/network-request-failed') {
-         errorMessage = 'Error de red. Por favor, revisa tu conexión.';
+        errorMessage = 'Error de red. Por favor, revisa tu conexión.';
       } else if (error.code === 'auth/too-many-requests') {
-          errorMessage = 'Demasiados intentos fallidos. Intenta más tarde.';
+        errorMessage = 'Demasiados intentos fallidos. Intenta más tarde.';
       }
       // Add other specific error codes if needed
 
@@ -94,6 +95,40 @@ const SignInForm: React.FC = () => {
     }
     // Removed finally block to explicitly handle isLoading in each branch
   };
+
+  const handlePasswordReset = async () => {
+    const email = form.getValues('email');
+    if (!email) {
+      toast({
+        title: 'Correo requerido',
+        description: 'Por favor, ingresá tu correo electrónico para recuperar tu contraseña.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      await sendPasswordReset(auth, email);
+      toast({
+        title: 'Correo enviado',
+        description: 'Te enviamos un enlace para restablecer tu contraseña.',
+      });
+    } catch (error: any) {
+      console.error("Password reset error:", error);
+      let message = 'Ocurrió un error al enviar el correo.';
+
+      if (error.code === 'auth/user-not-found') {
+        message = 'No existe una cuenta con ese correo.';
+      }
+
+      toast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive',
+      });
+    }
+  };
+
 
   return (
     <Form {...form}>
@@ -124,6 +159,15 @@ const SignInForm: React.FC = () => {
             </FormItem>
           )}
         />
+        <div className="text-right">
+          <button
+            type="button"
+            onClick={handlePasswordReset}
+            className="text-sm text-primary underline hover:opacity-80"
+          >
+            ¿Olvidaste tu contraseña?
+          </button>
+        </div>
         <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
           {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Ingresar'}
         </Button>
