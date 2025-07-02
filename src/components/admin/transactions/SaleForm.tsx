@@ -237,25 +237,162 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
     }, [saleItems]);
 
     const handleSubmitSale = async () => {
-        if (!selectedUserId || saleItems.length === 0 || !adminUser) {
-            toast({ title: 'Error', description: 'Faltan datos para registrar la venta.', variant: 'destructive' });
+        if (!selectedUserId) {
+            toast({ title: 'Error', description: 'Selecciona un cliente.', variant: 'destructive' });
+            return;
+        }
+        if (saleItems.length === 0) {
+            toast({ title: 'Error', description: 'Agrega al menos un producto a la venta.', variant: 'destructive' });
+            return;
+        }
+        if (!adminUser) {
+            toast({ title: 'Error', description: 'Usuario administrador no válido.', variant: 'destructive' });
             return;
         }
 
         setIsSubmitting(true);
+
         try {
-            // Transaction logic remains the same
+            const productUnderMinStock: { name: string, stock: number }[] = [];
+
             await runTransaction(db, async (transaction) => {
-                // ... (existing transaction logic is correct and doesn't need changes for UI)
+                const timestamp = Timestamp.now();
+                const originalSaleId = isEditMode ? saleToEdit?.id : null;
+                let originalSaleDetails: SaleDetail[] = [];
+                let originalSaleRef: any = null;
+
+                if (isEditMode && originalSaleId) {
+                    originalSaleRef = doc(db, 'transactions', originalSaleId);
+                    const originalSaleSnap = await transaction.get(originalSaleRef);
+                    if (!originalSaleSnap.exists()) {
+                        throw new Error("La venta original a modificar no existe.");
+                    }
+                    const originalSaleData = originalSaleSnap.data() as Transaction;
+                    originalSaleDetails = originalSaleData.saleDetails || [];
+                }
+
+                const allProductIds = new Set([
+                    ...originalSaleDetails.map(item => item.productId),
+                    ...saleItems.map(item => item.productId)
+                ]);
+                const productRefs = Array.from(allProductIds).map(id => doc(db, 'products', id));
+                const productDocs = await Promise.all(productRefs.map(ref => transaction.get(ref)));
+
+                const productDataMap = new Map<string, { exists: boolean, data: Product | null, ref: any }>();
+                productDocs.forEach((docSnap, index) => {
+                    const productId = Array.from(allProductIds)[index];
+                    productDataMap.set(productId, {
+                        exists: docSnap.exists(),
+                        data: docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as Product : null,
+                        ref: productRefs[index]
+                    });
+                });
+
+                const stockAdjustments = new Map<string, number>();
+
+                originalSaleDetails.forEach(item => {
+                    stockAdjustments.set(item.productId, (stockAdjustments.get(item.productId) || 0) + item.quantity);
+                });
+
+                for (const item of saleItems) {
+                    const currentAdjustment = stockAdjustments.get(item.productId) || 0;
+                    stockAdjustments.set(item.productId, currentAdjustment - item.quantity);
+
+                    const productInfo = productDataMap.get(item.productId);
+                    if (!productInfo || !productInfo.exists) {
+                        throw new Error(`Producto ${item.productName} (${item.productId}) no encontrado.`);
+                    }
+                    const currentQuantity = productInfo.data?.quantity ?? 0;
+                    const netChange = stockAdjustments.get(item.productId)!;
+
+                    if (currentQuantity + netChange < 0) {
+                        throw new Error(`Stock insuficiente para ${item.productName}. Disponible: ${currentQuantity}, Cambio Neto Requerido: ${netChange}`);
+                    }
+                }
+
+                if (isEditMode && originalSaleRef) {
+                    transaction.update(originalSaleRef, {
+                        isCancelled: true,
+                        cancelledAt: timestamp,
+                        cancelledBy: adminUser.uid,
+                        cancelledByName: adminUser.displayName || adminUser.email,
+                        cancellationReason: `Modificada por nueva venta ${timestamp.toMillis()}`,
+                    });
+                }
+
+                const newSaleTransactionRef = doc(collection(db, 'transactions'));
+                transaction.set(newSaleTransactionRef, {
+                    userId: selectedUserId,
+                    type: 'purchase',
+                    description: `Venta #${newSaleTransactionRef.id.substring(0, 6)}${isEditMode ? ' (Modificada)' : ''}`,
+                    amount: saleTotal,
+                    balanceAfter: 0, // Placeholder
+                    timestamp: timestamp,
+                    addedBy: adminUser.uid,
+                    addedByName: adminUser.displayName || adminUser.email,
+                    isAdminAction: true,
+                    isCancelled: false,
+                    isModified: isEditMode,
+                    modifiedAt: isEditMode ? timestamp : null,
+                    saleDetails: saleItems,
+                });
+
+                for (const [productId, quantityChange] of stockAdjustments.entries()) {
+                    if (quantityChange !== 0) {
+                        const productInfo = productDataMap.get(productId);
+                        if (productInfo) {
+                            const currentQuantity = productInfo.data?.quantity ?? 0;
+                            const newQuantity = currentQuantity + quantityChange;
+                            transaction.update(productInfo.ref, { quantity: newQuantity });
+
+                            if (newQuantity <= (productInfo.data?.minStock ?? 0)) {
+                                productUnderMinStock.push({
+                                    name: productInfo.data?.name || 'Desconocido',
+                                    stock: newQuantity,
+                                });
+                            }
+                        }
+                    }
+                }
             });
-            // ... (rest of the submission logic)
+
+            if (productUnderMinStock.length > 0) {
+                for (const product of productUnderMinStock) {
+                    await sendStockAlert(product);
+                }
+            }
+
+            onSuccessCallback?.();
+
             toast({
                 title: `¡Venta ${isEditMode ? 'Modificada' : 'Registrada'}!`,
-                description: `Venta por ${formatCurrency(saleTotal)} registrada.`,
+                description: `Venta por ${formatCurrency(saleTotal)} registrada para ${users.find(u => u.id === selectedUserId)?.name}.`,
             });
-            // ... (rest of the logic)
+
+            if (!isEditMode) {
+                setSelectedUserId('');
+                setSaleItems([]);
+                setSelectedProduct(null);
+                setSearchText('');
+                setQuantity('');
+            }
+
+            queryClient.invalidateQueries({ queryKey: ['products'] });
+            queryClient.invalidateQueries({ queryKey: ['transactions', selectedUserId] });
+            queryClient.invalidateQueries({ queryKey: ['userBalance', selectedUserId] });
+            queryClient.invalidateQueries({ queryKey: ['saleUsers'] });
+
+            if (isEditMode && onClose) {
+                onClose();
+            }
+
         } catch (error) {
-            // ... (error handling)
+            console.error("Error submitting sale:", error);
+            toast({
+                title: `Error al ${isEditMode ? 'Modificar' : 'Registrar'} Venta`,
+                description: `No se pudo completar la operación. ${error instanceof Error ? error.message : String(error)}`,
+                variant: 'destructive',
+            });
         } finally {
             setIsSubmitting(false);
         }
