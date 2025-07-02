@@ -441,73 +441,77 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                    <div className="md:col-span-7">
-                        <Label htmlFor="product-search">Buscar Producto o Escanear</Label>
-                        <div className="flex items-center gap-2">
-                            <Combobox
-                                options={filteredProductOptions}
-                                value={selectedProduct?.id ?? ''}
-                                onSelect={handleProductSelect}
-                                placeholder="Busca por nombre o código..."
-                                searchPlaceholder="Escribe para buscar..."
-                                notFoundMessage="Producto no encontrado."
-                                searchText={searchText}
-                                setSearchText={setSearchText}
-                                disabled={isSubmitting || !isCustomerSelected}
-                                triggerId="product-search"
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-12 md:items-end">
+                        <div className="md:col-span-12">
+                            <Label htmlFor="product-search">Buscar Producto o Escanear</Label>
+                            <div className="flex items-center gap-2">
+                                <Combobox
+                                    options={filteredProductOptions}
+                                    value={selectedProduct?.id ?? ''}
+                                    onSelect={handleProductSelect}
+                                    placeholder="Busca por nombre o código..."
+                                    searchPlaceholder="Escribe para buscar..."
+                                    notFoundMessage="Producto no encontrado."
+                                    searchText={searchText}
+                                    setSearchText={setSearchText}
+                                    disabled={isSubmitting || !isCustomerSelected}
+                                    triggerId="product-search"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={toggleScan}
+                                    title="Escanear Código"
+                                    disabled={isSubmitting || !isBarcodeDetectorSupported || !isCustomerSelected}
+                                    className="shrink-0"
+                                >
+                                    <ScanLine className="h-5 w-5" />
+                                </Button>
+                            </div>
+                            {!isBarcodeDetectorSupported && (
+                                <p className="text-xs text-destructive mt-1">Escáner no compatible.</p>
+                            )}
+                            {searchText && !selectedProduct && filteredProductOptions.length === 0 && !isLoadingProducts && (
+                                <Button
+                                    type="button"
+                                    variant="link"
+                                    className="text-xs h-auto p-0 mt-1"
+                                    onClick={() => setIsAddProductDialogOpen(true)}
+                                >
+                                    ¿Producto no encontrado? Agrégalo aquí.
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-12 gap-4 items-end">
+                        <div className="col-span-6 sm:col-span-4">
+                            <Label htmlFor="quantity">Cantidad</Label>
+                            <Input
+                                id="quantity"
+                                type="number"
+                                min="1"
+                                step="1"
+                                placeholder="Cant."
+                                value={quantity}
+                                onChange={(e) => setQuantity(e.target.value === '' ? '' : parseInt(e.target.value, 10) || '')}
+                                className="w-full text-center"
+                                disabled={!selectedProduct || isSubmitting || !isCustomerSelected}
                             />
+                        </div>
+
+                        <div className="col-span-6 sm:col-span-8">
                             <Button
                                 type="button"
-                                variant="outline"
-                                size="icon"
-                                onClick={toggleScan}
-                                title="Escanear Código"
-                                disabled={isSubmitting || !isBarcodeDetectorSupported || !isCustomerSelected}
-                                className="shrink-0"
+                                onClick={handleAddItem}
+                                disabled={!selectedProduct || !quantity || quantity <= 0 || isSubmitting || !isCustomerSelected}
+                                className="w-full"
                             >
-                                <ScanLine className="h-5 w-5" />
+                                <PlusCircle className="mr-2 h-4 w-4" /> Agregar
                             </Button>
                         </div>
-                        {!isBarcodeDetectorSupported && (
-                            <p className="text-xs text-destructive mt-1">Escáner no compatible.</p>
-                        )}
-                        {searchText && !selectedProduct && filteredProductOptions.length === 0 && !isLoadingProducts && (
-                            <Button
-                                type="button"
-                                variant="link"
-                                className="text-xs h-auto p-0 mt-1"
-                                onClick={() => setIsAddProductDialogOpen(true)}
-                            >
-                                ¿Producto no encontrado? Agrégalo aquí.
-                            </Button>
-                        )}
-                    </div>
-
-                    <div className="md:col-span-2">
-                        <Label htmlFor="quantity">Cantidad</Label>
-                        <Input
-                            id="quantity"
-                            type="number"
-                            min="1"
-                            step="1"
-                            placeholder="Cant."
-                            value={quantity}
-                            onChange={(e) => setQuantity(e.target.value === '' ? '' : parseInt(e.target.value, 10) || '')}
-                            className="w-full text-center"
-                            disabled={!selectedProduct || isSubmitting || !isCustomerSelected}
-                        />
-                    </div>
-
-                    <div className="md:col-span-3">
-                        <Button
-                            type="button"
-                            onClick={handleAddItem}
-                            disabled={!selectedProduct || !quantity || quantity <= 0 || isSubmitting || !isCustomerSelected}
-                            className="w-full"
-                        >
-                            <PlusCircle className="mr-2 h-4 w-4" /> Agregar
-                        </Button>
                     </div>
                 </div>
                 {selectedProduct && (

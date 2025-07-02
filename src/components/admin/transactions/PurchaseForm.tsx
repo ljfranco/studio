@@ -244,86 +244,90 @@ const PurchaseForm: React.FC = () => {
             )}
             <div className="border p-4 rounded-md space-y-4 bg-secondary/50">
                 <h3 className="text-lg font-medium mb-2">Agregar Producto Comprado</h3>
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                    <div className="md:col-span-5">
-                        <Label htmlFor="product-search">Producto</Label>
-                        <div className="flex items-center gap-2">
-                            <Combobox
-                                options={filteredProductOptions}
-                                value={selectedProduct?.id ?? ''}
-                                onSelect={handleProductSelect}
-                                placeholder="Busca o escanea..."
-                                searchPlaceholder="Escribe para buscar..."
-                                notFoundMessage="Producto no encontrado."
-                                searchText={searchText}
-                                setSearchText={setSearchText}
-                                disabled={isSubmitting}
-                                triggerId="product-search"
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-12 md:items-end">
+                        <div className="md:col-span-12">
+                            <Label htmlFor="product-search">Producto</Label>
+                            <div className="flex items-center gap-2">
+                                <Combobox
+                                    options={filteredProductOptions}
+                                    value={selectedProduct?.id ?? ''}
+                                    onSelect={handleProductSelect}
+                                    placeholder="Busca o escanea..."
+                                    searchPlaceholder="Escribe para buscar..."
+                                    notFoundMessage="Producto no encontrado."
+                                    searchText={searchText}
+                                    setSearchText={setSearchText}
+                                    disabled={isSubmitting}
+                                    triggerId="product-search"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={toggleScan}
+                                    title="Escanear Código"
+                                    disabled={isSubmitting || !isBarcodeDetectorSupported}
+                                    className="shrink-0"
+                                >
+                                    <ScanLine className="h-5 w-5" />
+                                </Button>
+                            </div>
+                            {!isBarcodeDetectorSupported && (
+                                <p className="text-xs text-destructive mt-1">Escáner no compatible.</p>
+                            )}
+                            {searchText && !selectedProduct && filteredProductOptions.length === 0 && !isLoadingProducts && (
+                                <Button
+                                    type="button"
+                                    variant="link"
+                                    className="text-xs h-auto p-0 mt-1"
+                                    onClick={() => setIsAddProductDialogOpen(true)}
+                                >
+                                    ¿Producto no encontrado? Agrégalo aquí.
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-12 gap-4 items-end">
+                        <div className="col-span-6 sm:col-span-4">
+                            <Label htmlFor="quantity">Cantidad</Label>
+                            <Input
+                                id="quantity"
+                                type="number"
+                                min="1"
+                                step="1"
+                                placeholder="Cant."
+                                value={quantity}
+                                onChange={(e) => setQuantity(e.target.value === '' ? '' : parseInt(e.target.value, 10) || '')}
+                                className="w-full text-center"
+                                disabled={!selectedProduct || isSubmitting}
                             />
+                        </div>
+                        <div className="col-span-6 sm:col-span-4">
+                            <Label htmlFor="purchasePrice">Precio Costo</Label>
+                            <Input
+                                id="purchasePrice"
+                                type="text"
+                                inputMode="decimal"
+                                placeholder="0.00"
+                                value={purchasePrice}
+                                onChange={(e) => setPurchasePrice(e.target.value)}
+                                className="w-full text-right"
+                                disabled={!selectedProduct || isSubmitting}
+                            />
+                        </div>
+
+                        <div className="col-span-12 sm:col-span-4">
                             <Button
                                 type="button"
-                                variant="outline"
-                                size="icon"
-                                onClick={toggleScan}
-                                title="Escanear Código"
-                                disabled={isSubmitting || !isBarcodeDetectorSupported}
-                                className="shrink-0"
+                                onClick={handleAddItem}
+                                disabled={!selectedProduct || !quantity || quantity <= 0 || !purchasePrice || isSubmitting}
+                                className="w-full"
                             >
-                                <ScanLine className="h-5 w-5" />
+                                <PlusCircle className="mr-2 h-4 w-4" /> Agregar
                             </Button>
                         </div>
-                        {!isBarcodeDetectorSupported && (
-                            <p className="text-xs text-destructive mt-1">Escáner no compatible.</p>
-                        )}
-                        {searchText && !selectedProduct && filteredProductOptions.length === 0 && !isLoadingProducts && (
-                            <Button
-                                type="button"
-                                variant="link"
-                                className="text-xs h-auto p-0 mt-1"
-                                onClick={() => setIsAddProductDialogOpen(true)}
-                            >
-                                ¿Producto no encontrado? Agrégalo aquí.
-                            </Button>
-                        )}
-                    </div>
-
-                    <div className="md:col-span-2">
-                        <Label htmlFor="quantity">Cantidad</Label>
-                        <Input
-                            id="quantity"
-                            type="number"
-                            min="1"
-                            step="1"
-                            placeholder="Cant."
-                            value={quantity}
-                            onChange={(e) => setQuantity(e.target.value === '' ? '' : parseInt(e.target.value, 10) || '')}
-                            className="w-full text-center"
-                            disabled={!selectedProduct || isSubmitting}
-                        />
-                    </div>
-                    <div className="md:col-span-3">
-                        <Label htmlFor="purchasePrice">Precio Costo</Label>
-                        <Input
-                            id="purchasePrice"
-                            type="text"
-                            inputMode="decimal"
-                            placeholder="0.00"
-                            value={purchasePrice}
-                            onChange={(e) => setPurchasePrice(e.target.value)}
-                            className="w-full text-right"
-                            disabled={!selectedProduct || isSubmitting}
-                        />
-                    </div>
-
-                    <div className="md:col-span-2">
-                        <Button
-                            type="button"
-                            onClick={handleAddItem}
-                            disabled={!selectedProduct || !quantity || quantity <= 0 || !purchasePrice || isSubmitting}
-                            className="w-full"
-                        >
-                            <PlusCircle className="mr-2 h-4 w-4" /> Agregar
-                        </Button>
                     </div>
                 </div>
                 {selectedProduct && (
