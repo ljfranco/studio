@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 interface FullScreenScannerProps {
   onScanSuccess: (scannedId: string) => void;
@@ -14,13 +13,13 @@ interface FullScreenScannerProps {
 
 const FullScreenScanner = ({ onScanSuccess, onClose }: FullScreenScannerProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
     const requestCameraPermission = async () => {
       try {
-        // Check for BarcodeDetector support
         if (!("BarcodeDetector" in window)) {
           console.error("Barcode Detector is not supported by this browser.");
           toast({
@@ -35,6 +34,7 @@ const FullScreenScanner = ({ onScanSuccess, onClose }: FullScreenScannerProps) =
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment" },
         });
+        streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
@@ -53,11 +53,10 @@ const FullScreenScanner = ({ onScanSuccess, onClose }: FullScreenScannerProps) =
 
     requestCameraPermission();
 
-    // Cleanup function to stop video stream
     return () => {
-      if (videoRef.current && videoRef.current.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach((track) => track.stop());
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
       }
     };
   }, [toast, onClose]);
@@ -77,7 +76,7 @@ const FullScreenScanner = ({ onScanSuccess, onClose }: FullScreenScannerProps) =
         try {
             const barcodes = await barcodeDetector.detect(videoRef.current);
             if (barcodes.length > 0 && barcodes[0].rawValue) {
-                isDetectionRunning = false; // Stop detection after a successful scan
+                isDetectionRunning = false;
                 onScanSuccess(barcodes[0].rawValue);
             }
         } catch (error) {
@@ -90,17 +89,20 @@ const FullScreenScanner = ({ onScanSuccess, onClose }: FullScreenScannerProps) =
     };
 
     const videoElement = videoRef.current;
-    videoElement.addEventListener("loadeddata", detectBarcode);
+    const handleCanPlay = () => {
+        requestAnimationFrame(detectBarcode);
+    }
+    videoElement.addEventListener("canplay", handleCanPlay);
 
 
     return () => {
       isDetectionRunning = false;
-      videoElement.removeEventListener("loadeddata", detectBarcode);
+      videoElement.removeEventListener("canplay", handleCanPlay);
     };
   }, [hasPermission, onScanSuccess]);
 
   if (hasPermission === false) {
-    return null; // Don't render anything if permission is denied
+    return null;
   }
 
   return (
