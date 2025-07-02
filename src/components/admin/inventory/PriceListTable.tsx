@@ -1,8 +1,8 @@
 
 'use client';
 
-import React, { useState, useMemo, useRef, useEffect } from 'react'; // Added useRef, useEffect
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import React, { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { collection, getDocs } from 'firebase/firestore';
 import { useFirebase } from '@/context/FirebaseContext';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/table';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Ban, Pencil, Percent, Info, FileDown, Search, ScanLine, Camera } from 'lucide-react'; // Added ScanLine, Camera
+import { Ban, Pencil, Percent, Info, FileDown, Search, ScanLine } from 'lucide-react';
 import { formatCurrency, cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { Product } from '@/types/product';
@@ -33,16 +33,14 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { autoTable, type UserOptions } from 'jspdf-autotable';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Import Alert
+import FullScreenScanner from '@/components/scanner/FullScreenScanner';
 
-// Extend jsPDF interface to include autoTable
 declare module 'jspdf' {
   interface jsPDF {
     autoTable: (options: UserOptions) => jsPDF;
   }
 }
 
-// Fetch products function (re-used)
 const fetchProducts = async (db: any): Promise<Product[]> => {
   const productsCol = collection(db, 'products');
   const snapshot = await getDocs(productsCol);
@@ -51,32 +49,25 @@ const fetchProducts = async (db: any): Promise<Product[]> => {
     .sort((a, b) => a.name.localeCompare(b.name));
 };
 
-// Fetch distributors function
 const fetchDistributors = async (db: any): Promise<Distributor[]> => {
   const distributorsCol = collection(db, 'distributors');
   const snapshot = await getDocs(distributorsCol);
-  return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Distributor)).sort((a, b) => a.name.localeCompare(b.name)); // Sort distributors by name
+  return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Distributor)).sort((a, b) => a.name.localeCompare(b.name));
 };
 
 const PriceListTable: React.FC = () => {
   const { db } = useFirebase();
-  const queryClient = useQueryClient();
   const { toast } = useToast();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedProductForEdit, setSelectedProductForEdit] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isScanning, setIsScanning] = useState(false); // Scanner state
-  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null); // Camera permission
-  const videoRef = useRef<HTMLVideoElement>(null); // Video ref
-  const canvasRef = useRef<HTMLCanvasElement>(null); // Canvas ref (optional for overlay)
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
-  // Fetch products
   const { data: products = [], isLoading: isLoadingProducts, error: errorProducts } = useQuery<Product[]>({
     queryKey: ['products'],
     queryFn: () => fetchProducts(db),
   });
 
-  // Fetch distributors
   const { data: distributors = [], isLoading: isLoadingDistributors, error: errorDistributors } = useQuery<Distributor[]>({
     queryKey: ['distributors'],
     queryFn: () => fetchDistributors(db),
@@ -85,7 +76,6 @@ const PriceListTable: React.FC = () => {
   const isLoading = isLoadingProducts || isLoadingDistributors;
   const error = errorProducts || errorDistributors;
 
-  // Filter products based on search term
   const filteredProducts = useMemo(() => {
     if (!searchTerm) {
       return products;
@@ -97,105 +87,23 @@ const PriceListTable: React.FC = () => {
     );
   }, [products, searchTerm]);
 
-  // --- Barcode Scanning Logic (Copied & adapted) ---
   const isBarcodeDetectorSupported = typeof window !== 'undefined' && 'BarcodeDetector' in window;
 
-  useEffect(() => {
-    let stream: MediaStream | null = null;
-    let stopStream = () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-        stream = null;
-      }
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
-      }
-    }
-
-    const getCameraPermission = async () => {
-      if (!isScanning) {
-        setHasCameraPermission(null);
-        stopStream();
-        return;
-      }
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-        setHasCameraPermission(true);
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(playError => {
-            console.error("Error playing video:", playError);
-            setHasCameraPermission(false);
-            toast({ variant: 'destructive', title: 'Error de Cámara', description: 'No se pudo iniciar la cámara.' });
-            setIsScanning(false);
-          });
-        } else {
-          stopStream();
-          setIsScanning(false);
-        }
-      } catch (err) {
-        console.error('Error accessing camera:', err);
-        setHasCameraPermission(false);
-        toast({ variant: 'destructive', title: 'Acceso a Cámara Denegado' });
-        setIsScanning(false);
-        stopStream();
-      }
-    };
-    getCameraPermission();
-    return stopStream;
-  }, [isScanning, toast]);
-
-  useEffect(() => {
-    if (!isScanning || !hasCameraPermission || !videoRef.current || !isBarcodeDetectorSupported) return;
-
-    let animationFrameId: number;
-    let isDetectionRunning = true;
-    const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['ean_13', 'upc_a', 'code_128', 'ean_8', 'itf', 'code_39', 'code_93'] });
-
-    const detectBarcode = async () => {
-      if (!isDetectionRunning || !videoRef.current || !videoRef.current.srcObject || !isScanning) return;
-      if (videoRef.current.readyState < videoRef.current.HAVE_METADATA || videoRef.current.videoWidth === 0) {
-        if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
-        return;
-      }
-
-      try {
-        const barcodes = await barcodeDetector.detect(videoRef.current);
-        if (barcodes.length > 0 && barcodes[0].rawValue && isDetectionRunning) {
-          const scannedId = barcodes[0].rawValue;
-          console.log("Barcode detected:", scannedId);
-          setSearchTerm(scannedId); // Update search term with scanned barcode
-          setIsScanning(false);
-          isDetectionRunning = false;
-          toast({ title: "Código Detectado", description: scannedId });
-        } else if (isDetectionRunning) {
-          animationFrameId = requestAnimationFrame(detectBarcode);
-        }
-      } catch (error) {
-        if (!(error instanceof DOMException && error.name === 'InvalidStateError')) {
-          console.error("Error detecting barcode:", error);
-        }
-        if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
-      }
-    };
-    if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
-
-    return () => {
-      isDetectionRunning = false;
-      cancelAnimationFrame(animationFrameId);
-    };
-  }, [isScanning, hasCameraPermission, isBarcodeDetectorSupported, toast]);
+  const handleScanSuccess = (scannedId: string) => {
+    console.log("Barcode detected:", scannedId);
+    setSearchTerm(scannedId);
+    setIsScannerOpen(false);
+    toast({ title: "Código Detectado", description: scannedId });
+  };
 
   const toggleScan = () => {
     if (!isBarcodeDetectorSupported) {
       toast({ title: "No Soportado", description: "El escáner no es compatible.", variant: "destructive" });
       return;
     }
-    setIsScanning(prev => !prev);
+    setIsScannerOpen(prev => !prev);
   };
-  // --- End Barcode Scanning Logic ---
 
-  // Calculate lowest purchase price and identify the distributor using filtered data
   const lowestPrices = useMemo(() => {
     const prices: Record<string, { price: number; distributorId: string | null }> = {};
     filteredProducts.forEach(product => {
@@ -214,17 +122,14 @@ const PriceListTable: React.FC = () => {
     return prices;
   }, [filteredProducts]);
 
-  // Calculate suggested selling price based on last purchase price and margin
   const calculateSuggestedPrice = (product: Product): number | null => {
     if (product.lastPurchasePrice === undefined || product.lastPurchasePrice === null || product.margin === undefined || product.margin === null) {
-      return null; // Not enough info
+      return null;
     }
     const marginMultiplier = 1 + (product.margin / 100);
     return product.lastPurchasePrice * marginMultiplier;
   };
 
-
-  // --- Open Edit Modal ---
   const handleEditClick = (product: Product) => {
     setSelectedProductForEdit(product);
     setIsEditDialogOpen(true);
@@ -235,8 +140,6 @@ const PriceListTable: React.FC = () => {
     setSelectedProductForEdit(null);
   };
 
-
-  // --- Export Functions (Use filteredProducts for exports) ---
   const handleExportExcel = () => {
     const dataToExport = filteredProducts.map(product => {
       const suggestedPrice = calculateSuggestedPrice(product);
@@ -272,16 +175,15 @@ const PriceListTable: React.FC = () => {
       return newRow;
     });
 
-
     const worksheet = XLSX.utils.json_to_sheet(formattedData);
 
     const columnWidths = [
-      { wch: 15 }, // Código
-      { wch: 30 }, // Producto
-      { wch: 15 }, // Ult. P. Compra
-      { wch: 12 }, // Margen (%)
-      { wch: 15 }, // P. Venta Sug.
-      { wch: 15 }, // P. Venta
+      { wch: 15 },
+      { wch: 30 },
+      { wch: 15 },
+      { wch: 12 },
+      { wch: 15 },
+      { wch: 15 },
       ...distributors.map(() => ({ wch: 15 }))
     ];
     worksheet['!cols'] = columnWidths;
@@ -306,7 +208,6 @@ const PriceListTable: React.FC = () => {
         worksheet[marginCellRef].z = '0.0"%"';
       }
     }
-
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'ListaPrecios');
@@ -362,18 +263,21 @@ const PriceListTable: React.FC = () => {
 
     doc.save(`ListaPrecios_${new Date().toISOString().split('T')[0]}.pdf`);
   };
-  // --- End Export Functions ---
-
 
   if (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return <p className="text-center text-destructive">Error al cargar datos: {errorMessage}</p>;
   }
 
-
   return (
     <TooltipProvider>
       <Card>
+        {isScannerOpen && (
+          <FullScreenScanner
+            onScanSuccess={handleScanSuccess}
+            onClose={() => setIsScannerOpen(false)}
+          />
+        )}
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between flex-wrap gap-4">
           <div>
             <CardTitle>Lista de Precios</CardTitle>
@@ -390,15 +294,14 @@ const PriceListTable: React.FC = () => {
                 className="pl-8 w-full sm:w-56"
               />
             </div>
-            {/* Scan Button */}
             <Button
               type="button"
               variant="outline"
               size="icon"
               onClick={toggleScan}
-              title={isScanning ? "Detener Escáner" : "Escanear Código"}
+              title="Escanear Código"
               disabled={!isBarcodeDetectorSupported}
-              className={cn("shrink-0", isScanning && "bg-destructive hover:bg-destructive/90 text-destructive-foreground")}
+              className="shrink-0"
             >
               <ScanLine className="h-5 w-5" />
             </Button>
@@ -413,20 +316,6 @@ const PriceListTable: React.FC = () => {
           </div>
         </CardHeader>
         <CardContent>
-          {/* Scanner View */}
-          {isScanning && (
-            <div className="relative mb-4">
-              <video ref={videoRef} className={cn("w-full max-w-sm mx-auto aspect-video rounded-md bg-muted", hasCameraPermission === false && "hidden")} autoPlay muted playsInline />
-              <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full pointer-events-none" />
-              <div className="absolute top-1/2 left-1/2 w-3/4 h-0.5 bg-red-500 animate-pulse -translate-x-1/2 -translate-y-1/2" /> {/* Centered Scan Line */}
-              {hasCameraPermission === null && !videoRef.current?.srcObject && (
-                <div className="absolute inset-0 flex items-center justify-center bg-muted rounded-md"><LoadingSpinner /><p className="ml-2 text-sm text-muted-foreground">Iniciando...</p></div>
-              )}
-              {hasCameraPermission === false && (
-                <Alert variant="destructive" className="mt-2"><Camera className="h-4 w-4" /><AlertTitle>Permiso Requerido</AlertTitle><AlertDescription>Permite el acceso a la cámara.</AlertDescription></Alert>
-              )}
-            </div>
-          )}
           {isLoading ? (
             <div className="flex justify-center items-center h-40"><LoadingSpinner /></div>
           ) : filteredProducts.length === 0 ? (
@@ -434,12 +323,12 @@ const PriceListTable: React.FC = () => {
               {searchTerm ? 'No se encontraron productos.' : 'No hay productos para mostrar precios.'}
             </p>
           ) : (
-            <div className="overflow-x-auto border rounded-md"> {/* Added overflow-x-auto */}
-              <Table className="min-w-full"> {/* Added min-w-full */}
+            <div className="overflow-x-auto border rounded-md">
+              <Table className="min-w-full">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="sticky left-0 bg-card z-20 min-w-[150px] border-r">Producto</TableHead>
-                    <TableHead className="text-center sticky left-[150px] bg-card z-20 px-1 w-[50px] border-r"></TableHead> {/* Adjusted width */}
+                    <TableHead className="text-center sticky left-[150px] bg-card z-20 px-1 w-[50px] border-r"></TableHead>
                     <TableHead className="text-right min-w-[120px]">Últ. P. Compra</TableHead>
                     <TableHead className="text-right min-w-[100px]">Margen (%)</TableHead>
                     <TableHead className="text-right min-w-[120px]">P. Venta Sug.</TableHead>
@@ -456,7 +345,7 @@ const PriceListTable: React.FC = () => {
                     const suggestedPrice = calculateSuggestedPrice(product);
                     return (
                       <TableRow key={product.id} className="hover:bg-muted/50">
-                        <TableCell className="font-medium sticky left-0 bg-card z-10 border-r whitespace-nowrap"> {/* Added whitespace-nowrap */}
+                        <TableCell className="font-medium sticky left-0 bg-card z-10 border-r whitespace-nowrap">
                           <div className="flex flex-col">
                             <span>{product.name}</span>
                             <span className="text-xs text-muted-foreground font-mono">{product.id}</span>
