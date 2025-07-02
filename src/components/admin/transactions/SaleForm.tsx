@@ -596,7 +596,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                             <span className="text-lg font-semibold">Total Venta:</span>
                             <span className="text-2xl font-bold">{formatCurrency(saleTotal)}</span>
                         </div>
-                        <div className='flex gap-2 flex-wrap justify-end'>
+                        <div className='flex justify-end gap-2 w-full'>
                             {!isEditMode && (
                                 <Button variant="outline" onClick={() => { setSaleItems([]); setSelectedUserId(''); }} disabled={isSubmitting}>
                                     Cancelar Venta
@@ -607,7 +607,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                                     Cancelar Modif.
                                 </Button>
                             )}
-                            <Button onClick={handleSubmitSale} disabled={isSubmitting || saleItems.length === 0 || !selectedUserId} size="lg" className="flex-grow md:flex-grow-0">
+                            <Button onClick={handleSubmitSale} disabled={isSubmitting || saleItems.length === 0 || !selectedUserId} size="lg">
                                 {isSubmitting
                                     ? <LoadingSpinner className="mr-2" />
                                     : (isEditMode ? <><Pencil className="mr-2 h-4 w-4" /> Guardar</> : 'Confirmar Venta')
