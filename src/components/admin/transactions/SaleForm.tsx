@@ -450,7 +450,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                                     options={filteredProductOptions}
                                     value={selectedProduct?.id ?? ''}
                                     onSelect={handleProductSelect}
-                                    placeholder="Busca por nombre o código..."
+                                    placeholder="Busca o escanea..."
                                     searchPlaceholder="Escribe para buscar..."
                                     notFoundMessage="Producto no encontrado."
                                     searchText={searchText}
