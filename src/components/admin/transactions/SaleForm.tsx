@@ -604,7 +604,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                             )}
                             {isEditMode && onClose && (
                                 <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
-                                    Cancelar Modif.
+                                    Cancelar
                                 </Button>
                             )}
                             <Button onClick={handleSubmitSale} disabled={isSubmitting || saleItems.length === 0 || !selectedUserId} size="lg">

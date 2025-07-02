@@ -26,7 +26,13 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dropdown-menu";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 
 // --- Helper function to get user names ---
@@ -216,6 +222,33 @@ const DailySalesList: React.FC = () => {
         return <p className="text-center text-destructive">Acceso denegado.</p>;
     }
 
+    const renderStatusIcons = (sale: Transaction) => (
+        <TooltipProvider>
+            <div className="flex items-center gap-1">
+                {sale.isModified && !sale.isCancelled && (
+                    <Tooltip>
+                        <TooltipTrigger>
+                            <Info className="h-3 w-3 text-blue-500" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>Esta venta fue modificada.</p>
+                        </TooltipContent>
+                    </Tooltip>
+                )}
+                {sale.isRestored && (
+                    <Tooltip>
+                        <TooltipTrigger>
+                            <Info className="h-3 w-3 text-orange-500" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>Esta venta fue restaurada después de ser cancelada.</p>
+                        </TooltipContent>
+                    </Tooltip>
+                )}
+            </div>
+        </TooltipProvider>
+    );
+
     const renderSaleCard = (sale: Transaction) => {
         const saleTime = sale.timestamp instanceof Timestamp ? sale.timestamp.toDate() : new Date();
         const formattedTime = format(saleTime, 'HH:mm:ss', { locale: es });
@@ -238,12 +271,11 @@ const DailySalesList: React.FC = () => {
                     </div>
                 </CardHeader>
                 <CardContent className="flex justify-between items-center pt-2">
-                    <div>
+                    <div className="flex items-center gap-2">
                         <Badge variant={isCancelled ? "outline" : "default"} className={cn(isCancelled ? "border-dashed" : "bg-green-100 text-green-800")}>
                             {isCancelled ? 'Cancelada' : 'Confirmada'}
                         </Badge>
-                        {sale.isModified && !isCancelled && <Info className="h-3 w-3 inline-block ml-1 text-blue-500" title="Modificada"/>}
-                        {sale.isRestored && <Info className="h-3 w-3 inline-block ml-1 text-orange-500" title="Restaurada"/>}
+                        {renderStatusIcons(sale)}
                     </div>
                     <div className="flex items-center gap-1">
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenSaleDetail(sale)} title="Ver Detalle">
@@ -311,11 +343,12 @@ const DailySalesList: React.FC = () => {
                                     {formatCurrency(sale.amount)}
                                 </TableCell>
                                 <TableCell className="text-center">
-                                    <Badge variant={isCancelled ? "outline" : "default"} className={cn("text-xs", isCancelled ? "border-dashed" : "bg-green-100 text-green-800")}>
-                                        {isCancelled ? 'Cancelada' : 'Confirmada'}
-                                    </Badge>
-                                    {sale.isModified && !isCancelled && <Info className="h-3 w-3 inline-block ml-1 text-blue-500" title="Modificada"/>}
-                                    {sale.isRestored && <Info className="h-3 w-3 inline-block ml-1 text-orange-500" title="Restaurada"/>}
+                                    <div className="flex items-center justify-center gap-2">
+                                        <Badge variant={isCancelled ? "outline" : "default"} className={cn("text-xs", isCancelled ? "border-dashed" : "bg-green-100 text-green-800")}>
+                                            {isCancelled ? 'Cancelada' : 'Confirmada'}
+                                        </Badge>
+                                        {renderStatusIcons(sale)}
+                                    </div>
                                 </TableCell>
                                 <TableCell className="text-center px-1">
                                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenSaleDetail(sale)} title="Ver Detalle">
