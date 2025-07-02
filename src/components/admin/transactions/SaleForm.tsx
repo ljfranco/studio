@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useFirebase } from '@/context/FirebaseContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,26 +11,22 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Combobox } from '@/components/ui/combobox'; // Assuming Combobox component exists
+import { Combobox } from '@/components/ui/combobox';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency, cn } from '@/lib/utils';
-import { PlusCircle, ScanLine, Trash2, Camera, Ban, Pencil, AlertCircle } from 'lucide-react'; // Added AlertCircle
-import type { User as AuthUser } from 'firebase/auth';
+import { PlusCircle, ScanLine, Trash2, Pencil, AlertCircle } from 'lucide-react';
 import type { Product } from '@/types/product';
-import type { UserData } from '@/types/user'; // Define or import UserData type
+import type { UserData } from '@/types/user';
 import type { Transaction, SaleDetail } from '@/types/transaction';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-// Removed direct import of UserDetailView's recalculateBalance
-import AddEditProductDialog from '../inventory/AddEditProductDialog'; // Import AddEditProductDialog
+import AddEditProductDialog from '../inventory/AddEditProductDialog';
 import { sendStockAlert } from '@/lib/notifications';
-import { se } from 'date-fns/locale';
+import FullScreenScanner from '@/components/scanner/FullScreenScanner'; // Import the new scanner
 
-// Special ID for the generic customer - Changed from reserved name
-const CONSUMIDOR_FINAL_ID = 'consumidor-final-id'; // Changed ID
+const CONSUMIDOR_FINAL_ID = 'consumidor-final-id';
 const CONSUMIDOR_FINAL_NAME = 'Consumidor Final';
 
-// --- Fetching Functions ---
 const fetchUsers = async (db: any): Promise<UserData[]> => {
     const usersCol = collection(db, 'users');
     const q = query(usersCol, where('role', '!=', 'admin'), orderBy('name'));
@@ -39,7 +35,6 @@ const fetchUsers = async (db: any): Promise<UserData[]> => {
         .map(doc => ({ id: doc.id, ...doc.data() } as UserData))
         .filter(user => user.id !== CONSUMIDOR_FINAL_ID);
 
-    // Ensure generic user exists and add to the beginning
     const genericUserDocRef = doc(db, 'users', CONSUMIDOR_FINAL_ID);
     const genericDocSnap = await getDoc(genericUserDocRef);
     if (!genericDocSnap.exists()) {
@@ -52,13 +47,11 @@ const fetchUsers = async (db: any): Promise<UserData[]> => {
                 createdAt: Timestamp.now(),
                 isGeneric: true,
             });
-            console.log("Created generic consumer document.");
         } catch (error) {
             console.error("Failed to create generic consumer document:", error);
         }
     }
     users.unshift({ id: CONSUMIDOR_FINAL_ID, name: CONSUMIDOR_FINAL_NAME, email: '', balance: 0, isEnabled: true, role: 'user', isGeneric: true });
-
 
     return users;
 };
@@ -69,40 +62,32 @@ const fetchProducts = async (db: any): Promise<Product[]> => {
     return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Product));
 };
 
-// --- Component Props ---
 interface SaleFormProps {
-    saleToEdit?: Transaction | null; // Optional prop for editing an existing sale
-    onClose?: () => void; // Callback to close the dialog/modal if editing
-    onSuccessCallback?: () => void; // General success callback (e.g., for recalculation)
+    saleToEdit?: Transaction | null;
+    onClose?: () => void;
+    onSuccessCallback?: () => void;
 }
 
-
-// --- Component ---
 const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSuccessCallback }) => {
     const { db } = useFirebase();
-    const { user: adminUser } = useAuth(); // Admin performing the sale
+    const { user: adminUser } = useAuth();
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const [selectedUserId, setSelectedUserId] = useState<string>('');
     const [saleItems, setSaleItems] = useState<SaleDetail[]>([]);
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-    const [quantity, setQuantity] = useState<number | ''>(''); // Allow empty string for placeholder
+    const [quantity, setQuantity] = useState<number | ''>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isScanning, setIsScanning] = useState(false);
-    const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [searchText, setSearchText] = useState(''); // For product search
-    const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false); // Add state for Add Product dialog
-    const [barcodeToAdd, setBarcodeToAdd] = useState<string | null>(null); // Add state to hold scanned barcode for new product
+    const [isScannerOpen, setIsScannerOpen] = useState(false); // New state for the scanner
+    const [searchText, setSearchText] = useState('');
+    const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
+    const [barcodeToAdd, setBarcodeToAdd] = useState<string | null>(null);
 
     const isEditMode = !!saleToEdit;
-    const isCustomerSelected = !!selectedUserId; // Check if a customer is selected
+    const isCustomerSelected = !!selectedUserId;
 
-    // --- Initialize form state for editing ---
     useEffect(() => {
         if (isEditMode && saleToEdit) {
-            console.log("Populating form for editing sale:", saleToEdit.id);
             setSelectedUserId(saleToEdit.userId);
             setSaleItems(saleToEdit.saleDetails || []);
         } else {
@@ -114,7 +99,6 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
         }
     }, [isEditMode, saleToEdit]);
 
-    // --- Data Fetching ---
     const { data: users = [], isLoading: isLoadingUsers, error: errorUsers } = useQuery<UserData[]>({
         queryKey: ['saleUsers'],
         queryFn: () => fetchUsers(db),
@@ -129,7 +113,6 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
     const isLoading = isLoadingUsers || isLoadingProducts;
     const error = errorUsers || errorProducts;
 
-    // --- Product Search ---
     const productOptions = useMemo(() => {
         if (!products) return [];
         return products.map(p => ({ value: p.id, label: `${p.name} (${p.id})` }));
@@ -149,118 +132,33 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
         setQuantity('');
     };
 
-
     // --- Barcode Scanning ---
     const isBarcodeDetectorSupported = typeof window !== 'undefined' && 'BarcodeDetector' in window;
 
-    useEffect(() => {
-        let stream: MediaStream | null = null;
-        let stopStream = () => {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-                stream = null;
-            }
-            if (videoRef.current) {
-                videoRef.current.srcObject = null;
-            }
+    const handleScanSuccess = (scannedId: string) => {
+        console.log("Barcode detected:", scannedId);
+        const product = products.find(p => p.id === scannedId);
+        setIsScannerOpen(false);
+
+        if (product) {
+            setSelectedProduct(product);
+            setSearchText(`${product.name} (${product.id})`);
+            setQuantity('');
+            toast({ title: "Código Detectado", description: `${product.name}` });
+        } else {
+            setBarcodeToAdd(scannedId);
+            setIsAddProductDialogOpen(true);
+            toast({ title: "Producto no encontrado", description: `Código: ${scannedId}. Agrega el nuevo producto.`, variant: "default", duration: 5000 });
         }
-        const getCameraPermission = async () => {
-            if (!isScanning) {
-                setHasCameraPermission(null);
-                stopStream();
-                return;
-            }
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-                setHasCameraPermission(true);
-                if (videoRef.current) {
-                    videoRef.current.srcObject = stream;
-                    videoRef.current.play().catch(playError => {
-                        console.error("Error playing video:", playError);
-                        setHasCameraPermission(false);
-                        toast({ variant: 'destructive', title: 'Error de Cámara', description: 'No se pudo iniciar la cámara.' });
-                        setIsScanning(false);
-                    });
-                } else {
-                    stopStream();
-                    setIsScanning(false);
-                }
-            } catch (err) {
-                console.error('Error accessing camera:', err);
-                setHasCameraPermission(false);
-                toast({ variant: 'destructive', title: 'Acceso a Cámara Denegado' });
-                setIsScanning(false);
-                stopStream();
-            }
-        };
-        getCameraPermission();
-        return stopStream;
-    }, [isScanning, toast]);
-
-    useEffect(() => {
-        if (!isScanning || !hasCameraPermission || !videoRef.current || !isBarcodeDetectorSupported) return;
-
-        let animationFrameId: number;
-        let isDetectionRunning = true;
-        const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['ean_13', 'upc_a', 'code_128', 'ean_8', 'itf', 'code_39', 'code_93'] });
-
-        const detectBarcode = async () => {
-            if (!isDetectionRunning || !videoRef.current || !videoRef.current.srcObject || !isScanning) return;
-            if (videoRef.current.readyState < videoRef.current.HAVE_METADATA || videoRef.current.videoWidth === 0) {
-                if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
-                return;
-            }
-            try {
-                const barcodes = await barcodeDetector.detect(videoRef.current);
-                if (barcodes.length > 0 && barcodes[0].rawValue && isDetectionRunning) {
-                    const scannedId = barcodes[0].rawValue;
-                    console.log("Barcode detected:", scannedId);
-                    const product = products.find(p => p.id === scannedId);
-                    setIsScanning(false);
-                    isDetectionRunning = false;
-
-                    if (product) {
-                        setSelectedProduct(product);
-                        setSearchText(`${product.name} (${product.id})`);
-                        setQuantity('');
-                        toast({ title: "Código Detectado", description: `${product.name}` });
-                    } else {
-                        // If product not found, open Add Product dialog
-                        setBarcodeToAdd(scannedId);
-                        setIsAddProductDialogOpen(true);
-                        toast({ title: "Producto no encontrado", description: `Código: ${scannedId}. Agrega el nuevo producto.`, variant: "default", duration: 5000 });
-                    }
-                } else if (isDetectionRunning) {
-                    animationFrameId = requestAnimationFrame(detectBarcode);
-                }
-            } catch (error) {
-                if (!(error instanceof DOMException && error.name === 'InvalidStateError')) {
-                    console.error("Error detecting barcode:", error);
-                }
-                if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
-            }
-        };
-        if (isDetectionRunning) animationFrameId = requestAnimationFrame(detectBarcode);
-        return () => {
-            isDetectionRunning = false;
-            cancelAnimationFrame(animationFrameId);
-        };
-    }, [isScanning, hasCameraPermission, products, toast, isBarcodeDetectorSupported]);
-
+    };
 
     const toggleScan = () => {
         if (!isBarcodeDetectorSupported) {
             toast({ title: "No Soportado", description: "El escáner no es compatible.", variant: "destructive" });
             return;
         }
-        setIsScanning(prev => !prev);
-        if (!isScanning) {
-            setSelectedProduct(null);
-            setSearchText('');
-            setQuantity('');
-        }
+        setIsScannerOpen(prev => !prev);
     };
-
 
     // --- Sale Item Management ---
     const handleAddItem = () => {
@@ -321,7 +219,6 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
     const saleTotal = useMemo(() => {
         return saleItems.reduce((total, item) => total + item.totalPrice, 0);
     }, [saleItems]);
-
 
     // --- Submit Sale ---
     const handleSubmitSale = async () => {
@@ -431,7 +328,6 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                         if (productInfo) {
                             const currentQuantity = productInfo.data?.quantity ?? 0;
                             const newQuantity = currentQuantity + quantityChange;
-                            console.log(`Product ${productId}: Current ${currentQuantity}, Change ${quantityChange}, New ${newQuantity}`);
                             transaction.update(productInfo.ref, { quantity: newQuantity });
 
                             if (newQuantity <= (productInfo.data?.minStock ?? 0)) {
@@ -440,21 +336,16 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                                     stock: newQuantity,
                                 });
                             }
-                        } else {
-                            console.warn(`Product info not found for ${productId} during stock update write.`);
                         }
                     }
                 }
             });
 
-
-            //Push Notifications for low stock products
             if (productUnderMinStock.length > 0) {
                 for (const product of productUnderMinStock) {
-                    await sendStockAlert(product)
-                };
+                    await sendStockAlert(product);
+                }
             }
-
 
             onSuccessCallback?.();
 
@@ -492,29 +383,30 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
         }
     };
 
-    // --- Handler for when a new product is added via the dialog ---
     const handleProductAdded = useCallback((newProduct: Product) => {
-        // Refetch products to include the new one in the list immediately
         queryClient.refetchQueries({ queryKey: ['products'] });
 
-        // Automatically select the newly added product
         if (newProduct) {
             setSelectedProduct(newProduct);
             setSearchText(`${newProduct.name} (${newProduct.id})`);
-            setQuantity(''); // Reset quantity
+            setQuantity('');
         }
 
-        setBarcodeToAdd(null); // Clear the barcode to add state
-    }, [queryClient]); // Dependencies
+        setBarcodeToAdd(null);
+    }, [queryClient]);
 
-
-    // --- Render Logic ---
     if (error) return <p className="text-center text-destructive">Error al cargar datos: {error instanceof Error ? error.message : 'Error desconocido'}</p>;
     if (isLoading) return <div className="flex justify-center p-4"><LoadingSpinner /></div>;
 
     return (
         <div className="space-y-6 overflow-y-auto">
-            {/* Customer Selection */}
+            {isScannerOpen && (
+                <FullScreenScanner
+                    onScanSuccess={handleScanSuccess}
+                    onClose={() => setIsScannerOpen(false)}
+                />
+            )}
+
             <div>
                 <Label htmlFor="customer-select">Cliente</Label>
                 <Select
@@ -537,7 +429,6 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                 {!isEditMode && saleItems.length > 0 && <p className="text-xs text-muted-foreground mt-1">Cliente bloqueado hasta finalizar o cancelar la venta actual.</p>}
             </div>
 
-            {/* Add Product Section */}
             <div className={cn(
                 "border p-4 rounded-md space-y-4 bg-secondary/50 transition-opacity",
                 !isCustomerSelected && "opacity-50 pointer-events-none"
@@ -550,24 +441,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                     </div>
                 )}
 
-                {/* Scanner View */}
-                {isScanning && (
-                    <div className="relative mb-4">
-                        <video ref={videoRef} className={cn("w-full max-w-sm mx-auto aspect-video rounded-md bg-muted", hasCameraPermission === false && "hidden")} autoPlay muted playsInline />
-                        <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full pointer-events-none" />
-                        <div className="absolute top-1/2 left-1/2 w-3/4 h-0.5 bg-red-500 animate-pulse -translate-x-1/2 -translate-y-1/2" /> {/* Centered Scan Line */}
-                        {hasCameraPermission === null && !videoRef.current?.srcObject && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-muted rounded-md"><LoadingSpinner /><p className="ml-2 text-sm text-muted-foreground">Iniciando...</p></div>
-                        )}
-                        {hasCameraPermission === false && (
-                            <Alert variant="destructive" className="mt-2"><Camera className="h-4 w-4" /><AlertTitle>Permiso Requerido</AlertTitle><AlertDescription>Permite el acceso a la cámara.</AlertDescription></Alert>
-                        )}
-                    </div>
-                )}
-
-                {/* Product Search / Scan & Quantity Inputs */}
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                    {/* Search Combobox & Scan Button (larger width on medium screens) */}
                     <div className="md:col-span-7">
                         <Label htmlFor="product-search">Buscar Producto o Escanear</Label>
                         <div className="flex items-center gap-2">
@@ -580,7 +454,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                                 notFoundMessage="Producto no encontrado."
                                 searchText={searchText}
                                 setSearchText={setSearchText}
-                                disabled={isScanning || isSubmitting || !isCustomerSelected}
+                                disabled={isSubmitting || !isCustomerSelected}
                                 triggerId="product-search"
                             />
                             <Button
@@ -588,9 +462,9 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                                 variant="outline"
                                 size="icon"
                                 onClick={toggleScan}
-                                title={isScanning ? "Detener Escáner" : "Escanear Código"}
+                                title="Escanear Código"
                                 disabled={isSubmitting || !isBarcodeDetectorSupported || !isCustomerSelected}
-                                className={cn("shrink-0", isScanning && "bg-destructive hover:bg-destructive/90 text-destructive-foreground")}
+                                className="shrink-0"
                             >
                                 <ScanLine className="h-5 w-5" />
                             </Button>
@@ -598,8 +472,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                         {!isBarcodeDetectorSupported && (
                             <p className="text-xs text-destructive mt-1">Escáner no compatible.</p>
                         )}
-                        {/* Button to add new product if not found */}
-                        {searchText && !selectedProduct && filteredProductOptions.length === 0 && !isLoadingProducts && !isScanning && (
+                        {searchText && !selectedProduct && filteredProductOptions.length === 0 && !isLoadingProducts && (
                             <Button
                                 type="button"
                                 variant="link"
@@ -611,7 +484,6 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                         )}
                     </div>
 
-                    {/* Quantity Input */}
                     <div className="md:col-span-2">
                         <Label htmlFor="quantity">Cantidad</Label>
                         <Input
@@ -627,7 +499,6 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                         />
                     </div>
 
-                    {/* Add Item Button */}
                     <div className="md:col-span-3">
                         <Button
                             type="button"
@@ -644,26 +515,24 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                         Seleccionado: {selectedProduct.name} - Precio: {formatCurrency(selectedProduct.sellingPrice ?? 0)} - Stock: {selectedProduct.quantity ?? 0}
                     </p>
                 )}
-
             </div>
 
-            {/* Sale Items List */}
             {saleItems.length > 0 && (
-                <div className="border rounded-md overflow-x-auto"> {/* Added overflow-x-auto */}
-                    <Table className="min-w-full"> {/* Added min-w-full */}
+                <div className="border rounded-md overflow-x-auto">
+                    <Table className="min-w-full">
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="min-w-[150px]">Producto</TableHead> {/* Added min-width */}
-                                <TableHead className="text-center min-w-[80px]">Cantidad</TableHead> {/* Added min-width */}
-                                <TableHead className="text-right min-w-[100px]">Precio Unit.</TableHead> {/* Added min-width */}
-                                <TableHead className="text-right min-w-[110px]">Total</TableHead> {/* Added min-width */}
+                                <TableHead className="min-w-[150px]">Producto</TableHead>
+                                <TableHead className="text-center min-w-[80px]">Cantidad</TableHead>
+                                <TableHead className="text-right min-w-[100px]">Precio Unit.</TableHead>
+                                <TableHead className="text-right min-w-[110px]">Total</TableHead>
                                 <TableHead className="text-center">Quitar</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {saleItems.map((item) => (
                                 <TableRow key={item.productId}>
-                                    <TableCell className="font-medium whitespace-nowrap">{item.productName}</TableCell> {/* Added whitespace-nowrap */}
+                                    <TableCell className="font-medium whitespace-nowrap">{item.productName}</TableCell>
                                     <TableCell className="text-center">{item.quantity}</TableCell>
                                     <TableCell className="text-right">{formatCurrency(item.unitPrice)}</TableCell>
                                     <TableCell className="text-right font-semibold">{formatCurrency(item.totalPrice)}</TableCell>
@@ -685,11 +554,10 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                 </div>
             )}
 
-            {/* Total and Submit */}
             {saleItems.length > 0 && (
                 <div className="flex flex-col items-end space-y-4 mt-4 sticky bottom-0 bg-background py-4 px-6 border-t">
                     <p className="text-xl font-bold">Total Venta: {formatCurrency(saleTotal)}</p>
-                    <div className='flex gap-2 flex-wrap justify-end'> {/* Added flex-wrap */}
+                    <div className='flex gap-2 flex-wrap justify-end'>
                         {!isEditMode && (
                             <Button
                                 variant="outline"
@@ -725,16 +593,15 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                 </div>
             )}
 
-            {/* Add Product Dialog - Triggered when barcode not found or button clicked */}
             <AddEditProductDialog
                 isOpen={isAddProductDialogOpen}
                 onClose={() => {
                     setIsAddProductDialogOpen(false);
-                    setBarcodeToAdd(null); // Clear barcode when closing
+                    setBarcodeToAdd(null);
                 }}
-                product={barcodeToAdd ? { id: barcodeToAdd } : null} // Pass barcode if scanned, otherwise null
+                product={barcodeToAdd ? { id: barcodeToAdd } : null}
                 onSuccessCallback={handleProductAdded}
-                isMinimalAdd={true} // Always use minimal add when triggered from here
+                isMinimalAdd={true}
             />
         </div>
     );
