@@ -364,10 +364,10 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
     );
 
     return (
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full" style={{ height: 'calc(100vh - 120px)' }}>
             {isScannerOpen && <FullScreenScanner onScanSuccess={handleScanSuccess} onClose={() => setIsScannerOpen(false)} />}
 
-            <div className="flex-grow space-y-6 overflow-y-auto pb-32"> {/* Add padding-bottom to avoid overlap with sticky footer */}
+            <div className="flex-grow space-y-6 overflow-y-auto p-4">
                 <div>
                     <Label htmlFor="customer-select">Cliente</Label>
                     <Select
@@ -453,7 +453,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
             </div>
 
             {saleItems.length > 0 && (
-                <div className="absolute bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm p-4 border-t">
+                <div className="flex-shrink-0 bg-background/95 backdrop-blur-sm p-4 border-t">
                     <div className="max-w-4xl mx-auto">
                         <div className="flex justify-between items-center mb-3">
                             <span className="text-lg font-semibold">Total Venta:</span>
