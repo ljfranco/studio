@@ -1,18 +1,39 @@
 
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Package, List, Truck } from 'lucide-react'; // Added icons
+import { ArrowLeft, Package, List, Truck } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import ProductTable from '@/components/admin/inventory/ProductTable'; // Component for product inventory
-import PriceListTable from '@/components/admin/inventory/PriceListTable'; // Component for price list view
-import DistributorManagement from '@/components/admin/inventory/DistributorManagement'; // Component for distributor management
-
+import ProductTable from '@/components/admin/inventory/ProductTable';
+import PriceListTable from '@/components/admin/inventory/PriceListTable';
+import DistributorManagement from '@/components/admin/inventory/DistributorManagement';
+import { useSwipeable } from 'react-swipeable';
 
 export default function AdminInventoryPage() {
+  const [activeTab, setActiveTab] = useState('inventory');
+
+  const tabOrder = ['inventory', 'pricelist', 'distributors'];
+
+  const handlers = useSwipeable({
+    onSwipedLeft: () => {
+      const currentIndex = tabOrder.indexOf(activeTab);
+      if (currentIndex < tabOrder.length - 1) {
+        setActiveTab(tabOrder[currentIndex + 1]);
+      }
+    },
+    onSwipedRight: () => {
+      const currentIndex = tabOrder.indexOf(activeTab);
+      if (currentIndex > 0) {
+        setActiveTab(tabOrder[currentIndex - 1]);
+      }
+    },
+    preventScrollOnSwipe: true,
+    trackMouse: true,
+  });
+
   return (
      <div className="space-y-4">
         {/* Back Button */}
@@ -29,7 +50,7 @@ export default function AdminInventoryPage() {
                 <CardDescription>Administra tus productos, stock, precios de venta y costos de distribuidores.</CardDescription>
             </CardHeader>
             <CardContent className='px-2'>
-                 <Tabs defaultValue="inventory" className="w-full">
+                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                     <TabsList className="flex w-full overflow-x-auto justify-start bg-secondary mb-6">
                         <TabsTrigger value="inventory">
                              <Package className="mr-2 h-4 w-4" /> Inventario
@@ -43,18 +64,20 @@ export default function AdminInventoryPage() {
                     </TabsList>
 
                     {/* Inventory Tab Content */}
-                    <TabsContent value="inventory">
-                        <ProductTable />
-                    </TabsContent>
+                    <div {...handlers}>
+                      <TabsContent value="inventory">
+                          <ProductTable />
+                      </TabsContent>
 
-                    {/* Price List Tab Content */}
-                    <TabsContent value="pricelist" className="space-y-6">
-                         <PriceListTable />
-                    </TabsContent>
-                    {/* Distributors Tab Content */}
-                    <TabsContent value="distributors" className="space-y-6">
-                         <DistributorManagement /> {/* Add Distributor Management section */}
-                    </TabsContent>
+                      {/* Price List Tab Content */}
+                      <TabsContent value="pricelist" className="space-y-6">
+                          <PriceListTable />
+                      </TabsContent>
+                      {/* Distributors Tab Content */}
+                      <TabsContent value="distributors" className="space-y-6">
+                          <DistributorManagement />
+                      </TabsContent>
+                    </div>
                 </Tabs>
             </CardContent>
         </Card>
