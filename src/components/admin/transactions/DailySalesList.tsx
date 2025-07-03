@@ -28,6 +28,11 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import {
     Tooltip,
     TooltipContent,
     TooltipProvider,
@@ -222,32 +227,52 @@ const DailySalesList: React.FC = () => {
         return <p className="text-center text-destructive">Acceso denegado.</p>;
     }
 
-    const renderStatusIcons = (sale: Transaction) => (
-        <TooltipProvider>
+    const renderStatusIcons = (sale: Transaction) => {
+        const iconInfo = [
+            {
+                condition: sale.isModified && !sale.isCancelled,
+                text: "Esta venta fue modificada.",
+                className: "text-blue-500",
+            },
+            {
+                condition: sale.isRestored,
+                text: "Esta venta fue restaurada después de ser cancelada.",
+                className: "text-orange-500",
+            },
+        ];
+
+        const content = (
             <div className="flex items-center gap-1">
-                {sale.isModified && !sale.isCancelled && (
-                    <Tooltip>
-                        <TooltipTrigger>
-                            <Info className="h-3 w-3 text-blue-500" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p>Esta venta fue modificada.</p>
-                        </TooltipContent>
-                    </Tooltip>
-                )}
-                {sale.isRestored && (
-                    <Tooltip>
-                        <TooltipTrigger>
-                            <Info className="h-3 w-3 text-orange-500" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p>Esta venta fue restaurada después de ser cancelada.</p>
-                        </TooltipContent>
-                    </Tooltip>
+                {iconInfo.map((info, index) =>
+                    info.condition ? (
+                        isMobile ? (
+                            <Popover key={index}>
+                                <PopoverTrigger asChild>
+                                    <button>
+                                        <Info className={`h-3 w-3 ${info.className}`} />
+                                    </button>
+                                </PopoverTrigger>
+                                <PopoverContent>
+                                    <p>{info.text}</p>
+                                </PopoverContent>
+                            </Popover>
+                        ) : (
+                            <Tooltip key={index}>
+                                <TooltipTrigger>
+                                    <Info className={`h-3 w-3 ${info.className}`} />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>{info.text}</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        )
+                    ) : null
                 )}
             </div>
-        </TooltipProvider>
-    );
+        );
+
+        return isMobile ? content : <TooltipProvider>{content}</TooltipProvider>;
+    };
 
     const renderSaleCard = (sale: Transaction) => {
         const saleTime = sale.timestamp instanceof Timestamp ? sale.timestamp.toDate() : new Date();

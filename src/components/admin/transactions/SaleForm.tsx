@@ -16,7 +16,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency, cn } from '@/lib/utils';
-import { PlusCircle, ScanLine, Trash2, Pencil, AlertCircle, Plus, Minus } from 'lucide-react';
+import { PlusCircle, ScanLine, Trash2, Pencil, AlertCircle, Plus, Minus, ShoppingCart } from 'lucide-react';
 import type { Product } from '@/types/product';
 import type { UserData } from '@/types/user';
 import type { Transaction, SaleDetail } from '@/types/transaction';
@@ -446,7 +446,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                             <Plus className="h-4 w-4" />
                         </Button>
                         <span className="text-xs text-muted-foreground">
-                            @ {formatCurrency(item.unitPrice)}
+                            {formatCurrency(item.unitPrice)}
                         </span>
                     </div>
                     <Button
@@ -607,10 +607,10 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
                                     Cancelar
                                 </Button>
                             )}
-                            <Button onClick={handleSubmitSale} disabled={isSubmitting || saleItems.length === 0 || !selectedUserId} size="lg">
+                            <Button className="px-3" onClick={handleSubmitSale} disabled={isSubmitting || saleItems.length === 0 || !selectedUserId} size="lg">
                                 {isSubmitting
                                     ? <LoadingSpinner className="mr-2" />
-                                    : (isEditMode ? <><Pencil className="mr-2 h-4 w-4" /> Guardar</> : 'Confirmar')
+                                    : (isEditMode ? <><Pencil className="mr-2 h-4 w-4" /> Guardar</> : <><ShoppingCart className="h-4 w-4" />Confirmar</>)
                                 }
                             </Button>
                         </div>

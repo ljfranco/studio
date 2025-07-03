@@ -29,11 +29,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import EditPriceDialog from './EditPriceDialog';
+import ProductDetailDialog from './ProductDetailDialog'; // Import ProductDetailDialog
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { autoTable, type UserOptions } from 'jspdf-autotable';
 import FullScreenScanner from '@/components/scanner/FullScreenScanner';
+import { useIsMobile } from '@/hooks/use-mobile'; // Import useIsMobile
 
 declare module 'jspdf' {
   interface jsPDF {
@@ -62,6 +64,8 @@ const PriceListTable: React.FC = () => {
   const [selectedProductForEdit, setSelectedProductForEdit] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isProductDetailOpen, setIsProductDetailOpen] = useState(false); // Nuevo estado para el modal de detalle
+  const [selectedProductForDetail, setSelectedProductForDetail] = useState<Product | null>(null); // Producto para el modal de detalle
 
   const { data: products = [], isLoading: isLoadingProducts, error: errorProducts } = useQuery<Product[]>({
     queryKey: ['products'],
@@ -104,6 +108,64 @@ const PriceListTable: React.FC = () => {
     setIsScannerOpen(prev => !prev);
   };
 
+  const isMobile = useIsMobile();
+
+  const renderPriceListCard = (product: Product) => {
+    const suggestedPrice = calculateSuggestedPrice(product);
+    const lowestPriceInfo = lowestPrices[product.id];
+    const lowestDistributor = lowestPriceInfo?.distributorId ? distributors.find(d => d.id === lowestPriceInfo.distributorId)?.name : 'N/A';
+
+    return (
+      <Card key={product.id} className="mb-4 shadow-sm cursor-pointer" onClick={() => handleOpenProductDetail(product)}>
+        <CardHeader className="pb-2">
+          <div className="flex justify-between items-start">
+            <div>
+              <CardTitle className="text-lg">{product.name}</CardTitle>
+              <CardDescription className="text-sm text-muted-foreground">Código: {product.id}</CardDescription>
+            </div>
+            <div className="text-right">
+              <p className="text-xl font-bold text-primary">{formatCurrency(product.sellingPrice ?? 0)}</p>
+              <p className="text-xs text-muted-foreground">Margen: {product.margin ?? 0}%</p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-2">
+          <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+            <div>
+              <p className="text-muted-foreground">Últ. P. Compra:</p>
+              <p className="font-semibold">{formatCurrency(product.lastPurchasePrice ?? 0)}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">P. Venta Sug.:</p>
+              <p className="font-semibold text-blue-600">
+                {suggestedPrice !== null ? formatCurrency(suggestedPrice) : 'N/A'}
+              </p>
+            </div>
+            {lowestPriceInfo && lowestPriceInfo.price > 0 && (
+              <div className="col-span-2">
+                <p className="text-muted-foreground">Menor P. Compra:</p>
+                <p className="font-semibold text-green-600">
+                  {formatCurrency(lowestPriceInfo.price)} <span className="text-xs text-muted-foreground">({lowestDistributor})</span>
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={(e) => { e.stopPropagation(); handleEditClick(product); }}
+              title={`Editar precios de ${product.name}`}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   const lowestPrices = useMemo(() => {
     const prices: Record<string, { price: number; distributorId: string | null }> = {};
     filteredProducts.forEach(product => {
@@ -138,6 +200,16 @@ const PriceListTable: React.FC = () => {
   const handleCloseModal = () => {
     setIsEditDialogOpen(false);
     setSelectedProductForEdit(null);
+  };
+
+  const handleOpenProductDetail = (product: Product) => {
+    setSelectedProductForDetail(product);
+    setIsProductDetailOpen(true);
+  };
+
+  const handleCloseProductDetail = () => {
+    setIsProductDetailOpen(false);
+    setSelectedProductForDetail(null);
   };
 
   const handleExportExcel = () => {
@@ -284,6 +356,7 @@ const PriceListTable: React.FC = () => {
             <CardDescription>Comparativa de precios de venta y compra. Busca por nombre o código.</CardDescription>
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+            <div className='flex'>
             <div className="relative flex-grow min-w-[150px] sm:flex-grow-0">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -305,6 +378,7 @@ const PriceListTable: React.FC = () => {
             >
               <ScanLine className="h-5 w-5" />
             </Button>
+            </div>
             <div className="flex gap-2 w-full sm:w-auto">
               <Button variant="outline" onClick={handleExportExcel} disabled={filteredProducts.length === 0 || isLoading} className="flex-1 sm:flex-none">
                 <FileDown className="mr-2 h-4 w-4" /> Excel
@@ -323,80 +397,86 @@ const PriceListTable: React.FC = () => {
               {searchTerm ? 'No se encontraron productos.' : 'No hay productos para mostrar precios.'}
             </p>
           ) : (
-            <div className="overflow-x-auto border rounded-md">
-              <Table className="min-w-full">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="sticky left-0 bg-card z-20 min-w-[150px] border-r">Producto</TableHead>
-                    <TableHead className="text-center sticky left-[150px] bg-card z-20 px-1 w-[50px] border-r"></TableHead>
-                    <TableHead className="text-right min-w-[120px]">Últ. P. Compra</TableHead>
-                    <TableHead className="text-right min-w-[100px]">Margen (%)</TableHead>
-                    <TableHead className="text-right min-w-[120px]">P. Venta Sug.</TableHead>
-                    <TableHead className="text-right min-w-[120px]">P. Venta</TableHead>
-                    {distributors.map(dist => (
-                      <TableHead key={dist.id} className="text-right min-w-[120px]">
-                        {dist.name}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredProducts.map((product) => {
-                    const suggestedPrice = calculateSuggestedPrice(product);
-                    return (
-                      <TableRow key={product.id} className="hover:bg-muted/50">
-                        <TableCell className="font-medium sticky left-0 bg-card z-10 border-r whitespace-nowrap">
-                          <div className="flex flex-col">
-                            <span>{product.name}</span>
-                            <span className="text-xs text-muted-foreground font-mono">{product.id}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center sticky left-[150px] bg-card z-10 px-1 border-r">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() => handleEditClick(product)}
-                                title={`Editar precios de ${product.name}`}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Editar Precios y Margen</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TableCell>
-                        <TableCell className="text-right text-muted-foreground">
-                          {formatCurrency(product.lastPurchasePrice ?? 0)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {`${product.margin ?? 0}%`}
-                        </TableCell>
-                        <TableCell className="text-right text-blue-600">
-                          {suggestedPrice !== null ? formatCurrency(suggestedPrice) : <Ban className="h-4 w-4 mx-auto text-muted-foreground" />}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(product.sellingPrice ?? 0)}
-                        </TableCell>
-                        {distributors.map(dist => {
-                          const purchasePrice = product.purchasePrices?.[dist.id];
-                          const isLowest = lowestPrices[product.id]?.distributorId === dist.id && lowestPrices[product.id]?.price > 0;
+            isMobile ? (
+              <div className="space-y-4">
+                {filteredProducts.map(renderPriceListCard)}
+              </div>
+            ) : (
+              <div className="overflow-x-auto border rounded-md">
+                <Table className="min-w-full">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="sticky left-0 bg-card z-20 min-w-[150px] border-r">Producto</TableHead>
+                      <TableHead className="text-center sticky left-[150px] bg-card z-20 px-1 w-[50px] border-r"></TableHead>
+                      <TableHead className="text-right min-w-[120px]">Últ. P. Compra</TableHead>
+                      <TableHead className="text-right min-w-[100px]">Margen (%)</TableHead>
+                      <TableHead className="text-right min-w-[120px]">P. Venta Sug.</TableHead>
+                      <TableHead className="text-right min-w-[120px]">P. Venta</TableHead>
+                      {distributors.map(dist => (
+                        <TableHead key={dist.id} className="text-right min-w-[120px]">
+                          {dist.name}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredProducts.map((product) => {
+                      const suggestedPrice = calculateSuggestedPrice(product);
+                      return (
+                        <TableRow key={product.id} className="hover:bg-muted/50">
+                          <TableCell className="font-medium sticky left-0 bg-card z-10 border-r whitespace-nowrap">
+                            <div className="flex flex-col">
+                              <span>{product.name}</span>
+                              <span className="text-xs text-muted-foreground font-mono">{product.id}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center sticky left-[150px] bg-card z-10 px-1 border-r">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => handleEditClick(product)}
+                                  title={`Editar precios de ${product.name}`}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Editar Precios y Margen</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {formatCurrency(product.lastPurchasePrice ?? 0)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {`${product.margin ?? 0}%`}
+                          </TableCell>
+                          <TableCell className="text-right text-blue-600">
+                            {suggestedPrice !== null ? formatCurrency(suggestedPrice) : <Ban className="h-4 w-4 mx-auto text-muted-foreground" />}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(product.sellingPrice ?? 0)}
+                          </TableCell>
+                          {distributors.map(dist => {
+                            const purchasePrice = product.purchasePrices?.[dist.id];
+                            const isLowest = lowestPrices[product.id]?.distributorId === dist.id && lowestPrices[product.id]?.price > 0;
 
-                          return (
-                            <TableCell key={dist.id} className={cn("text-right", isLowest && "font-bold text-green-600")}>
-                              {purchasePrice !== undefined && purchasePrice !== null ? formatCurrency(purchasePrice) : <Ban className="h-4 w-4 mx-auto text-muted-foreground" />}
-                            </TableCell>
-                          );
-                        })}
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+                            return (
+                              <TableCell key={dist.id} className={cn("text-right", isLowest && "font-bold text-green-600")}>
+                                {purchasePrice !== undefined && purchasePrice !== null ? formatCurrency(purchasePrice) : <Ban className="h-4 w-4 mx-auto text-muted-foreground" />}
+                              </TableCell>
+                            );
+                          })}
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )
           )}
         </CardContent>
         {selectedProductForEdit && (
@@ -408,6 +488,14 @@ const PriceListTable: React.FC = () => {
           />
         )}
       </Card>
+      {selectedProductForDetail && (
+        <ProductDetailDialog
+          isOpen={isProductDetailOpen}
+          onClose={handleCloseProductDetail}
+          product={selectedProductForDetail}
+          distributors={distributors}
+        />
+      )}
     </TooltipProvider>
   );
 };
