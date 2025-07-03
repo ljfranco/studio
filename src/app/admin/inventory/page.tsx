@@ -28,9 +28,9 @@ export default function AdminInventoryPage() {
                 <CardTitle className="text-2xl">Gestión de Inventario y Precios</CardTitle>
                 <CardDescription>Administra tus productos, stock, precios de venta y costos de distribuidores.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className='px-2'>
                  <Tabs defaultValue="inventory" className="w-full">
-                    <TabsList className="grid w-full grid-cols-3 bg-secondary mb-6">
+                    <TabsList className="flex w-full overflow-x-auto justify-start bg-secondary mb-6">
                         <TabsTrigger value="inventory">
                              <Package className="mr-2 h-4 w-4" /> Inventario
                         </TabsTrigger>
