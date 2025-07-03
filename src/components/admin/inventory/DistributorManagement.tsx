@@ -22,6 +22,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from '@/hooks/use-toast';
 import type { Distributor } from '@/types/distributor';
 import { cn } from '@/lib/utils'; // Import cn
+import { useIsMobile } from '@/hooks/use-mobile'; // Import useIsMobile
 
 // Fetch distributors function
 const fetchDistributors = async (db: any): Promise<Distributor[]> => {
@@ -72,6 +73,48 @@ const DistributorManagement: React.FC = () => {
     },
   });
 
+  const isMobile = useIsMobile();
+
+  const renderDistributorCard = (dist: Distributor) => (
+    <Card key={dist.id} className="mb-4 shadow-sm">
+      <CardHeader className="pb-2">
+        <div className="flex justify-between items-start">
+          <div>
+            <CardTitle className="text-lg">{dist.name}</CardTitle>
+            <CardDescription className="text-sm text-muted-foreground">Contacto: {dist.contactPerson || '-'}</CardDescription>
+          </div>
+          <div className="flex items-center space-x-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => handleEditDistributor(dist)}
+              title={`Editar ${dist.name}`}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-destructive hover:text-destructive/90"
+              onClick={() => openDeleteDialog(dist)}
+              title={`Eliminar ${dist.name}`}
+              disabled={deleteMutation.isPending && distributorToDelete?.id === dist.id}
+            >
+              {deleteMutation.isPending && distributorToDelete?.id === dist.id ? <LoadingSpinner size="sm" /> : <Trash2 className="h-4 w-4" />}
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-2">
+        <div className="text-sm text-muted-foreground">
+          <p><strong>Teléfono:</strong> {dist.phone || '-'}</p>
+          <p><strong>Email:</strong> {dist.email || '-'}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   const handleAddDistributor = () => {
     setSelectedDistributor(null);
     setIsAddEditDialogOpen(true);
@@ -99,8 +142,8 @@ const DistributorManagement: React.FC = () => {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
+      <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between flex-wrap gap-4">
+        <div className="flex-grow">
           <CardTitle>Distribuidores</CardTitle>
           <CardDescription>Gestiona tus proveedores de productos.</CardDescription>
         </div>
@@ -114,50 +157,56 @@ const DistributorManagement: React.FC = () => {
         ) : distributors.length === 0 ? (
           <p className="text-center text-muted-foreground">No hay distribuidores registrados.</p>
         ) : (
-          <div className="overflow-x-auto"> {/* Added overflow-x-auto */}
-            <Table className="min-w-full"> {/* Added min-w-full */}
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-[150px]">Nombre</TableHead> {/* Added min-width */}
-                  <TableHead className="min-w-[150px]">Contacto</TableHead> {/* Added min-width */}
-                  <TableHead className="min-w-[120px]">Teléfono</TableHead> {/* Added min-width */}
-                  <TableHead className="min-w-[180px]">Email</TableHead> {/* Added min-width */}
-                  <TableHead className="text-center min-w-[100px]">Acciones</TableHead> {/* Added min-width */}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {distributors.map((dist) => (
-                  <TableRow key={dist.id}>
-                    <TableCell className="font-medium whitespace-nowrap">{dist.name}</TableCell> {/* Added whitespace-nowrap */}
-                    <TableCell className="whitespace-nowrap">{dist.contactPerson || '-'}</TableCell> {/* Added whitespace-nowrap */}
-                    <TableCell className="whitespace-nowrap">{dist.phone || '-'}</TableCell> {/* Added whitespace-nowrap */}
-                    <TableCell className="whitespace-nowrap">{dist.email || '-'}</TableCell> {/* Added whitespace-nowrap */}
-                    <TableCell className="text-center space-x-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleEditDistributor(dist)}
-                        title={`Editar ${dist.name}`}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive/90"
-                        onClick={() => openDeleteDialog(dist)}
-                        title={`Eliminar ${dist.name}`}
-                        disabled={deleteMutation.isPending && distributorToDelete?.id === dist.id}
-                      >
-                         {deleteMutation.isPending && distributorToDelete?.id === dist.id ? <LoadingSpinner size="sm"/> : <Trash2 className="h-4 w-4" />}
-                      </Button>
-                    </TableCell>
+          isMobile ? (
+            <div className="space-y-4">
+              {distributors.map(renderDistributorCard)}
+            </div>
+          ) : (
+            <div className="overflow-x-auto"> {/* Added overflow-x-auto */}
+              <Table className="min-w-full"> {/* Added min-w-full */}
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[150px]">Nombre</TableHead> {/* Added min-width */}
+                    <TableHead className="min-w-[150px]">Contacto</TableHead> {/* Added min-width */}
+                    <TableHead className="min-w-[120px]">Teléfono</TableHead> {/* Added min-width */}
+                    <TableHead className="min-w-[180px]">Email</TableHead> {/* Added min-width */}
+                    <TableHead className="text-center min-w-[100px]">Acciones</TableHead> {/* Added min-width */}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {distributors.map((dist) => (
+                    <TableRow key={dist.id}>
+                      <TableCell className="font-medium whitespace-nowrap">{dist.name}</TableCell> {/* Added whitespace-nowrap */}
+                      <TableCell className="whitespace-nowrap">{dist.contactPerson || '-'}</TableCell> {/* Added whitespace-nowrap */}
+                      <TableCell className="whitespace-nowrap">{dist.phone || '-'}</TableCell> {/* Added whitespace-nowrap */}
+                      <TableCell className="whitespace-nowrap">{dist.email || '-'}</TableCell> {/* Added whitespace-nowrap */}
+                      <TableCell className="text-center space-x-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleEditDistributor(dist)}
+                          title={`Editar ${dist.name}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive/90"
+                          onClick={() => openDeleteDialog(dist)}
+                          title={`Eliminar ${dist.name}`}
+                          disabled={deleteMutation.isPending && distributorToDelete?.id === dist.id}
+                        >
+                           {deleteMutation.isPending && distributorToDelete?.id === dist.id ? <LoadingSpinner size="sm"/> : <Trash2 className="h-4 w-4" />}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )
         )}
       </CardContent>
 

@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu"; // Import DropdownMenu
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils'; // Import cn
+import { useIsMobile } from '@/hooks/use-mobile'; // Import useIsMobile
 
 interface UserData {
   id: string;
@@ -51,6 +52,7 @@ const UserManagementTable: React.FC = () => {
   const [actionType, setActionType] = useState<'enable' | 'disable' | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false); // Renamed for clarity
   const [isUpdatingRole, setIsUpdatingRole] = useState(false); // State for role update
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (!adminUser || adminRole !== 'admin') {
@@ -156,6 +158,165 @@ const UserManagementTable: React.FC = () => {
 
   const isUpdating = isUpdatingStatus || isUpdatingRole; // Combine loading states
 
+  const renderUserCard = (user: UserData) => (
+    <Card key={user.id} className="mb-4 shadow-sm">
+      <CardHeader className="pb-2">
+        <div className="flex justify-between items-start">
+          <div>
+            <CardTitle className="text-lg">{user.name}</CardTitle>
+            <CardDescription className="text-sm text-muted-foreground">{user.email}</CardDescription>
+          </div>
+          <Badge variant={user.role === 'admin' ? 'destructive' : 'secondary'} className="capitalize">
+            {user.role === 'admin' ? 'Admin' : 'Usuario'}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-2">
+        <div className="text-sm text-muted-foreground mb-2">
+          <p><strong>Dirección:</strong> {user.address}</p>
+          <p><strong>Teléfono:</strong> {user.phone}</p>
+        </div>
+        <div className="flex justify-between items-center">
+          <Badge variant={user.isEnabled ? 'default' : 'outline'} className={cn(user.isEnabled ? 'bg-green-600 text-white' : '', "whitespace-nowrap")}>
+            {user.isEnabled ? 'Habilitado' : 'Deshabilitado'}
+          </Badge>
+          <div className="flex items-center space-x-1">
+            {/* Enable/Disable Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`h-8 w-8 ${user.isEnabled ? 'text-destructive hover:text-destructive/90' : 'text-green-600 hover:text-green-700'}`}
+              onClick={() => openConfirmationDialog(user, user.isEnabled ? 'disable' : 'enable')}
+              title={user.isEnabled ? 'Deshabilitar Usuario' : 'Habilitar Usuario'}
+              disabled={isUpdating}
+            >
+              {user.isEnabled ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+            </Button>
+
+            {/* Role Management Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild disabled={isUpdating}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-primary hover:text-primary/90"
+                  title="Gestionar Roles"
+                  disabled={isUpdating}
+                >
+                  <ShieldAlert className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {user.role !== 'admin' && (
+                  <DropdownMenuItem
+                    onSelect={() => handleSetRole(user.id, user.name, 'admin')}
+                    disabled={isUpdatingRole}
+                  >
+                    <ShieldCheck className="mr-2 h-4 w-4" />
+                    Hacer Administrador
+                  </DropdownMenuItem>
+                )}
+                {user.role !== 'user' && (
+                  <DropdownMenuItem
+                    onSelect={() => handleSetRole(user.id, user.name, 'user')}
+                    disabled={isUpdatingRole}
+                  >
+                    <ShieldX className="mr-2 h-4 w-4" />
+                    Hacer Usuario
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const renderUserTable = () => (
+    <div className="overflow-x-auto">
+      <Table className="min-w-full">
+        <TableHeader>
+          <TableRow>
+            <TableHead className="min-w-[150px]">Nombre</TableHead>
+            <TableHead className="min-w-[200px]">Dirección</TableHead>
+            <TableHead className="min-w-[120px]">Teléfono</TableHead>
+            <TableHead>Rol</TableHead>
+            <TableHead>Estado</TableHead>
+            <TableHead className="text-center min-w-[100px]">Acciones</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {users.map((user) => (
+            <TableRow key={user.id}>
+              <TableCell className="font-medium whitespace-nowrap">{user.name}</TableCell>
+              <TableCell className="whitespace-nowrap">{user.address}</TableCell>
+              <TableCell className="whitespace-nowrap">{user.phone}</TableCell>
+              <TableCell>
+                <Badge variant={user.role === 'admin' ? 'destructive' : 'secondary'} className="capitalize">
+                  {user.role === 'admin' ? 'Admin' : 'Usuario'}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <Badge variant={user.isEnabled ? 'default' : 'outline'} className={cn(user.isEnabled ? 'bg-green-600 text-white' : '', "whitespace-nowrap")}>
+                  {user.isEnabled ? 'Habilitado' : 'Deshabilitado'}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-center space-x-1">
+                {/* Enable/Disable Button */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`h-8 w-8 ${user.isEnabled ? 'text-destructive hover:text-destructive/90' : 'text-green-600 hover:text-green-700'}`}
+                  onClick={() => openConfirmationDialog(user, user.isEnabled ? 'disable' : 'enable')}
+                  title={user.isEnabled ? 'Deshabilitar Usuario' : 'Habilitar Usuario'}
+                  disabled={isUpdating}
+                >
+                  {user.isEnabled ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                </Button>
+
+                {/* Role Management Dropdown */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild disabled={isUpdating}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-primary hover:text-primary/90"
+                      title="Gestionar Roles"
+                      disabled={isUpdating}
+                    >
+                      <ShieldAlert className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {user.role !== 'admin' && (
+                      <DropdownMenuItem
+                        onSelect={() => handleSetRole(user.id, user.name, 'admin')}
+                        disabled={isUpdatingRole}
+                      >
+                        <ShieldCheck className="mr-2 h-4 w-4" />
+                        Hacer Administrador
+                      </DropdownMenuItem>
+                    )}
+                    {user.role !== 'user' && (
+                      <DropdownMenuItem
+                        onSelect={() => handleSetRole(user.id, user.name, 'user')}
+                        disabled={isUpdatingRole}
+                      >
+                        <ShieldX className="mr-2 h-4 w-4" />
+                        Hacer Usuario
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+
   return (
     <>
       <Card className="shadow-md">
@@ -167,88 +328,11 @@ const UserManagementTable: React.FC = () => {
           {users.length === 0 ? (
             <p className="text-center text-muted-foreground">No hay otros usuarios registrados.</p>
           ) : (
-            <div className="overflow-x-auto"> {/* Added overflow-x-auto */}
-              <Table className="min-w-full"> {/* Added min-w-full */}
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="min-w-[150px]">Nombre</TableHead> {/* Added min-width */}
-                    <TableHead className="min-w-[200px]">Dirección</TableHead> {/* Added min-width */}
-                    <TableHead className="min-w-[120px]">Teléfono</TableHead> {/* Added min-width */}
-                    <TableHead>Rol</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-center min-w-[100px]">Acciones</TableHead> {/* Added min-width */}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {users.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium whitespace-nowrap">{user.name}</TableCell> {/* Added whitespace-nowrap */}
-                      <TableCell className="whitespace-nowrap">{user.address}</TableCell> {/* Added whitespace-nowrap */}
-                      <TableCell className="whitespace-nowrap">{user.phone}</TableCell> {/* Added whitespace-nowrap */}
-                      <TableCell>
-                         <Badge variant={user.role === 'admin' ? 'destructive' : 'secondary'} className="capitalize">
-                            {user.role === 'admin' ? 'Admin' : 'Usuario'}
-                         </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={user.isEnabled ? 'default' : 'outline'} className={cn(user.isEnabled ? 'bg-green-600 text-white' : '', "whitespace-nowrap")}> {/* Added whitespace-nowrap */}
-                          {user.isEnabled ? 'Habilitado' : 'Deshabilitado'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center space-x-1">
-                        {/* Enable/Disable Button */}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className={`h-8 w-8 ${user.isEnabled ? 'text-destructive hover:text-destructive/90' : 'text-green-600 hover:text-green-700'}`}
-                          onClick={() => openConfirmationDialog(user, user.isEnabled ? 'disable' : 'enable')}
-                          title={user.isEnabled ? 'Deshabilitar Usuario' : 'Habilitar Usuario'}
-                          disabled={isUpdating} // Disable during any update
-                        >
-                          {user.isEnabled ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
-                        </Button>
-
-                         {/* Role Management Dropdown */}
-                         <DropdownMenu>
-                           <DropdownMenuTrigger asChild disabled={isUpdating}>
-                               <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-primary hover:text-primary/90"
-                                title="Gestionar Roles"
-                                disabled={isUpdating} // Disable during any update
-                               >
-                                <ShieldAlert className="h-4 w-4" />
-                               </Button>
-                           </DropdownMenuTrigger>
-                           <DropdownMenuContent align="end">
-                             {user.role !== 'admin' && (
-                               <DropdownMenuItem
-                                 onSelect={() => handleSetRole(user.id, user.name, 'admin')}
-                                 disabled={isUpdatingRole}
-                               >
-                                <ShieldCheck className="mr-2 h-4 w-4" />
-                                Hacer Administrador
-                               </DropdownMenuItem>
-                             )}
-                             {user.role !== 'user' && (
-                               <DropdownMenuItem
-                                 onSelect={() => handleSetRole(user.id, user.name, 'user')}
-                                 disabled={isUpdatingRole}
-                               >
-                                 <ShieldX className="mr-2 h-4 w-4" />
-                                 Hacer Usuario
-                               </DropdownMenuItem>
-                             )}
-                           </DropdownMenuContent>
-                         </DropdownMenu>
-
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            isMobile ? (
+              <div>{users.map(renderUserCard)}</div>
+            ) : (
+              renderUserTable()
+            )
           )}
         </CardContent>
       </Card>

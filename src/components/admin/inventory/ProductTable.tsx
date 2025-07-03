@@ -24,6 +24,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from '@/hooks/use-toast';
 import type { Product } from '@/types/product';
 import FullScreenScanner from '@/components/scanner/FullScreenScanner';
+import { useIsMobile } from '@/hooks/use-mobile'; // Import useIsMobile
 
 const fetchProducts = async (db: any): Promise<Product[]> => {
   const productsCol = collection(db, 'products');
@@ -82,6 +83,7 @@ const ProductTable: React.FC = () => {
   });
 
   const isBarcodeDetectorSupported = typeof window !== 'undefined' && 'BarcodeDetector' in window;
+  const isMobile = useIsMobile();
 
   const handleScanSuccess = (scannedId: string) => {
     console.log("Barcode detected:", scannedId);
@@ -89,6 +91,50 @@ const ProductTable: React.FC = () => {
     setIsScannerOpen(false);
     toast({ title: "Código Detectado", description: scannedId });
   };
+
+  const renderProductCard = (product: Product) => (
+    <Card key={product.id} className="mb-4 shadow-sm">
+      <CardHeader className="pb-2">
+        <div className="flex justify-between items-start">
+          <div>
+            <CardTitle className="text-lg">{product.name}</CardTitle>
+            <CardDescription className="text-sm text-muted-foreground">Código: {product.id}</CardDescription>
+          </div>
+          <div className="text-right">
+            <p className="text-xl font-bold text-primary">{formatCurrency(product.sellingPrice ?? 0)}</p>
+            <p className="text-xs text-muted-foreground">Últ. Compra: {formatCurrency(product.lastPurchasePrice ?? 0)}</p>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-2 flex justify-between items-center">
+        <div>
+          <p className="text-sm">Stock: <span className="font-semibold">{product.quantity ?? 0}</span></p>
+          <p className="text-xs text-muted-foreground">Mínimo: {product.minStock ?? 0}</p>
+        </div>
+        <div className="flex items-center space-x-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => handleEditProduct(product)}
+            title={`Editar ${product.name}`}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-destructive hover:text-destructive/90"
+            onClick={() => openDeleteDialog(product)}
+            title={`Eliminar ${product.name}`}
+            disabled={deleteMutation.isPending && productToDelete?.id === product.id}
+          >
+            {deleteMutation.isPending && productToDelete?.id === product.id ? <LoadingSpinner size="sm" /> : <Trash2 className="h-4 w-4" />}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   const toggleScan = () => {
     if (!isBarcodeDetectorSupported) {
@@ -142,7 +188,7 @@ const ProductTable: React.FC = () => {
         </Button>
       </CardHeader>
       <CardContent>
-        <div className="mb-4 flex gap-2 items-center flex-wrap">
+        <div className="mb-4 flex gap-2 items-center flex">
           <div className="relative flex-grow min-w-[150px]">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -173,58 +219,64 @@ const ProductTable: React.FC = () => {
             {searchTerm ? 'No se encontraron productos.' : 'No hay productos en el inventario.'}
           </p>
         ) : (
-          <div className="overflow-x-auto border rounded-md">
-            <Table className="min-w-full">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-[120px]">Código Barras</TableHead>
-                  <TableHead className="min-w-[150px]">Nombre</TableHead>
-                  <TableHead className="text-right min-w-[80px]">Cantidad</TableHead>
-                  <TableHead className="text-right min-w-[120px]">Stock Min.</TableHead>
-                  <TableHead className="text-right min-w-[120px]">Últ. P. Compra</TableHead>
-                  <TableHead className="text-right min-w-[120px]">Precio Venta</TableHead>
-                  <TableHead className="text-center min-w-[100px]">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredProducts.map((product) => (
-                  <TableRow key={product.id}>
-                    <TableCell className="font-mono text-xs whitespace-nowrap">{product.id}</TableCell>
-                    <TableCell className="font-medium whitespace-nowrap">{product.name}</TableCell>
-                    <TableCell className="text-right">{product.quantity ?? 0}</TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {product.minStock ?? 0}
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {formatCurrency(product.lastPurchasePrice ?? 0)}
-                    </TableCell>
-                    <TableCell className="text-right">{formatCurrency(product.sellingPrice ?? 0)}</TableCell>
-                    <TableCell className="text-center space-x-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleEditProduct(product)}
-                        title={`Editar ${product.name}`}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive/90"
-                        onClick={() => openDeleteDialog(product)}
-                        title={`Eliminar ${product.name}`}
-                        disabled={deleteMutation.isPending && productToDelete?.id === product.id}
-                      >
-                        {deleteMutation.isPending && productToDelete?.id === product.id ? <LoadingSpinner size="sm" /> : <Trash2 className="h-4 w-4" />}
-                      </Button>
-                    </TableCell>
+          isMobile ? (
+            <div className="space-y-4">
+              {filteredProducts.map(renderProductCard)}
+            </div>
+          ) : (
+            <div className="overflow-x-auto border rounded-md">
+              <Table className="min-w-full">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[120px]">Código Barras</TableHead>
+                    <TableHead className="min-w-[150px]">Nombre</TableHead>
+                    <TableHead className="text-right min-w-[80px]">Cantidad</TableHead>
+                    <TableHead className="text-right min-w-[120px]">Stock Min.</TableHead>
+                    <TableHead className="text-right min-w-[120px]">Últ. P. Compra</TableHead>
+                    <TableHead className="text-right min-w-[120px]">Precio Venta</TableHead>
+                    <TableHead className="text-center min-w-[100px]">Acciones</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {filteredProducts.map((product) => (
+                    <TableRow key={product.id}>
+                      <TableCell className="font-mono text-xs whitespace-nowrap">{product.id}</TableCell>
+                      <TableCell className="font-medium whitespace-nowrap">{product.name}</TableCell>
+                      <TableCell className="text-right">{product.quantity ?? 0}</TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {product.minStock ?? 0}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {formatCurrency(product.lastPurchasePrice ?? 0)}
+                      </TableCell>
+                      <TableCell className="text-right">{formatCurrency(product.sellingPrice ?? 0)}</TableCell>
+                      <TableCell className="text-center space-x-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleEditProduct(product)}
+                          title={`Editar ${product.name}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive/90"
+                          onClick={() => openDeleteDialog(product)}
+                          title={`Eliminar ${product.name}`}
+                          disabled={deleteMutation.isPending && productToDelete?.id === product.id}
+                        >
+                          {deleteMutation.isPending && productToDelete?.id === product.id ? <LoadingSpinner size="sm" /> : <Trash2 className="h-4 w-4" />}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )
         )}
       </CardContent>
 
