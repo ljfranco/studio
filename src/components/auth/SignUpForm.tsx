@@ -22,6 +22,11 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
+
+interface SignUpFormProps {
+  onSuccess?: () => void;
+  isAdmin?: boolean; 
+}
 // Add optional address and phone fields to the schema
 const signUpSchema = z.object({
   name: z.string().min(2, { message: 'El nombre debe tener al menos 2 caracteres.' }),
@@ -33,7 +38,7 @@ const signUpSchema = z.object({
 
 type SignUpFormValues = z.infer<typeof signUpSchema>;
 
-const SignUpForm: React.FC = () => {
+const SignUpForm: React.FC<SignUpFormProps> = ({ onSuccess, isAdmin = false }) => {
   const { auth, db } = useFirebase();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -52,29 +57,44 @@ const SignUpForm: React.FC = () => {
   const onSubmit = async (values: SignUpFormValues) => {
     setIsLoading(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
-      const user = userCredential.user;
+      if (isAdmin) {
+        // LLAMADA A NUESTRA API (No afecta la sesión)
+        const response = await fetch('/api/admin/create-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(values),
+        });
 
-      // Update user profile (optional, for display name)
-      await updateProfile(user, { displayName: values.name });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error);
 
-      // Create user document in Firestore with role 'user' and new fields
-      await setDoc(doc(db, 'users', user.uid), {
-        uid: user.uid,
-        name: values.name,
-        email: values.email,
-        address: values.address?.trim() || null, // Store null if empty
-        phone: values.phone?.trim() || null,   // Store null if empty
-        role: 'user', // Assign default role
-        balance: 0, // Initialize balance
-        isEnabled: true, // Initialize as enabled
-        createdAt: Timestamp.now(), // Use Timestamp for creation date
-      });
+      } else {
+        const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
+        const user = userCredential.user;
 
+        // Update user profile (optional, for display name)
+        await updateProfile(user, { displayName: values.name });
+
+        // Create user document in Firestore with role 'user' and new fields
+        await setDoc(doc(db, 'users', user.uid), {
+          uid: user.uid,
+          name: values.name,
+          email: values.email,
+          address: values.address?.trim() || null, // Store null if empty
+          phone: values.phone?.trim() || null,   // Store null if empty
+          role: 'user', // Assign default role
+          balance: 0, // Initialize balance
+          isEnabled: true, // Initialize as enabled
+          createdAt: Timestamp.now(), // Use Timestamp for creation date
+        });
+      }
       toast({
         title: '¡Éxito!',
         description: 'Tu cuenta ha sido creada.',
       });
+      if (onSuccess) {
+        onSuccess();
+      }
       // No need to redirect here, AuthContext handles the state change
     } catch (error: any) {
         console.error("Sign up error:", error);
@@ -87,8 +107,8 @@ const SignUpForm: React.FC = () => {
             errorMessage = 'La contraseña es demasiado débil.';
         }
       toast({
-        title: 'Error de Registro',
-        description: errorMessage,
+        title: 'Error',
+        description: error.message || 'Error al crear la cuenta.',
         variant: 'destructive',
       });
     } finally {
@@ -165,7 +185,7 @@ const SignUpForm: React.FC = () => {
           )}
         />
         <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
-          {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Registrarse'}
+          {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isAdmin ? 'Crear Usuario' : 'Registrarse')}
         </Button>
       </form>
     </Form>

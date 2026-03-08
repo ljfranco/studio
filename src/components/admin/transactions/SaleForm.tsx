@@ -85,6 +85,7 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
     const [searchText, setSearchText] = useState('');
     const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
     const [barcodeToAdd, setBarcodeToAdd] = useState<string | null>(null);
+    const [cashReceived, setCashReceived] = useState<number | ''>('');
 
     const isEditMode = !!saleToEdit;
     const isCustomerSelected = !!selectedUserId;
@@ -234,6 +235,15 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
 
     const saleTotal = useMemo(() => {
         return saleItems.reduce((total, item) => total + item.totalPrice, 0);
+    }, [saleItems]);
+
+    const changeDue = useMemo(() => {
+        if (cashReceived === '' || cashReceived < saleTotal) return 0;
+        return cashReceived - saleTotal;
+    }, [cashReceived, saleTotal]);
+
+    useEffect(() => {
+        if (saleItems.length === 0) setCashReceived('');
     }, [saleItems]);
 
     const handleSubmitSale = async () => {
@@ -592,6 +602,35 @@ const SaleForm: React.FC<SaleFormProps> = ({ saleToEdit = null, onClose, onSucce
             {saleItems.length > 0 && (
                 <div className="flex-shrink-0 bg-background/95 backdrop-blur-sm p-4 border-t">
                     <div className="max-w-4xl mx-auto">
+                        <div className="grid grid-cols-2 gap-4 p-3 mb-4 rounded-lg bg-secondary/30 border">
+                            <div className="space-y-1">
+                                <Label htmlFor="cash-received" className="text-xs uppercase font-bold text-muted-foreground">
+                                    Efectivo Recibido
+                                </Label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                                    <Input
+                                        id="cash-received"
+                                        type="number"
+                                        placeholder="0.00"
+                                        value={cashReceived}
+                                        onChange={(e) => setCashReceived(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                        className="pl-7 text-lg font-semibold"
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-1 text-right">
+                                <Label className="text-xs uppercase font-bold text-muted-foreground">
+                                    Vuelto a entregar
+                                </Label>
+                                <div className={cn(
+                                    "text-2xl font-black tracking-tight transition-colors",
+                                    cashReceived !== '' && cashReceived < saleTotal ? "text-destructive" : "text-green-600"
+                                )}>
+                                    {formatCurrency(changeDue)}
+                                </div>
+                            </div>
+                        </div>
                         <div className="flex justify-between items-center mb-3">
                             <span className="text-lg font-semibold">Total Venta:</span>
                             <span className="text-2xl font-bold">{formatCurrency(saleTotal)}</span>
