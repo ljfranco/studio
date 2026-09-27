@@ -36,6 +36,7 @@ import 'jspdf-autotable';
 import { autoTable, type UserOptions } from 'jspdf-autotable';
 import FullScreenScanner from '@/components/scanner/FullScreenScanner';
 import { useIsMobile } from '@/hooks/use-mobile'; // Import useIsMobile
+import SmartUpdateBtn from './SmartUpdateBtn';
 
 declare module 'jspdf' {
   interface jsPDF {
@@ -211,7 +212,35 @@ const PriceListTable: React.FC = () => {
     setIsProductDetailOpen(false);
     setSelectedProductForDetail(null);
   };
+  const handleExportJSON = () => {
+    // 1. Mapeamos los productos filtrados para obtener solo los campos deseados
+    const dataToExport = filteredProducts.map(product => ({
+      codigo: product.id,
+      nombre: product.name,
+      precio: product.sellingPrice ?? 0,
+    }));
 
+    // 2. Crear un Blob con el contenido JSON
+    const jsonString = JSON.stringify(dataToExport, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    
+    // 3. Crear el link de descarga
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `ListaPrecios_${new Date().toISOString().split('T')[0]}.json`;
+    
+    // 4. Disparar la descarga y limpiar
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({ 
+      title: "Exportación Exitosa", 
+      description: "El archivo JSON ha sido generado correctamente." 
+    });
+  };
   const handleExportExcel = () => {
     const dataToExport = filteredProducts.map(product => {
       const suggestedPrice = calculateSuggestedPrice(product);
@@ -351,41 +380,47 @@ const PriceListTable: React.FC = () => {
           />
         )}
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between flex-wrap gap-4">
-          <div>
-            <CardTitle>Lista de Precios</CardTitle>
-            <CardDescription>Comparativa de precios de venta y compra. Busca por nombre o código.</CardDescription>
+          <div className="space-y-1">
+            <CardTitle className="text-2xl font-bold tracking-tight">Lista de Precios</CardTitle>
+            <CardDescription>Gestión inteligente de precios y comparación con proveedores.</CardDescription>
           </div>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
-            <div className='flex'>
-            <div className="relative flex-grow min-w-[150px] sm:flex-grow-0">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Buscar o escanear..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 w-full sm:w-56"
-              />
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={toggleScan}
-              title="Escanear Código"
-              disabled={!isBarcodeDetectorSupported}
-              className="shrink-0"
-            >
-              <ScanLine className="h-5 w-5" />
-            </Button>
-            </div>
-            <div className="flex gap-2 w-full sm:w-auto">
-              <Button variant="outline" onClick={handleExportExcel} disabled={filteredProducts.length === 0 || isLoading} className="flex-1 sm:flex-none">
-                <FileDown className="mr-2 h-4 w-4" /> Excel
+          
+          <div className="flex flex-col gap-4 w-full sm:w-auto">
+            {/* Fila superior: Buscador y Escáner - Usamos items-center para que el botón de escáner no se estire */}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-grow">
+                <Search className="absolute left-2.5 top-3 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Buscar producto o código..." 
+                  className="pl-8 h-10" // H10 para altura estándar
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <Button variant="outline" size="icon" className="h-10 w-10" onClick={toggleScan}>
+                <ScanLine className="h-5 w-5" />
               </Button>
-              <Button variant="outline" onClick={handleExportPDF} disabled={filteredProducts.length === 0 || isLoading} className="flex-1 sm:flex-none">
-                <FileDown className="mr-2 h-4 w-4" /> PDF
-              </Button>
+            </div>
+
+            {/* Fila inferior: Exportaciones y SmartUpdateBtn - items-end es clave aquí */}
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={handleExportExcel} className="h-9">
+                  <FileDown className="h-4 w-4 mr-1"/> Excel
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleExportPDF} className="h-9">
+                  <FileDown className="h-4 w-4 mr-1"/> PDF
+                </Button>
+              </div>
+
+              {/* El componente SmartUpdateBtn ya tiene sus propios labels, 
+                  por eso usamos items-end para que el botón se alinee con el borde inferior de los otros */}
+              <div className="flex-grow sm:flex-grow-0">
+                <SmartUpdateBtn 
+                  myProducts={products} 
+                  distributors={distributors} 
+                />
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -402,7 +437,7 @@ const PriceListTable: React.FC = () => {
                 {filteredProducts.map(renderPriceListCard)}
               </div>
             ) : (
-              <div className="overflow-x-auto border rounded-md">
+              <div className="overflow-x-auto border rounded-md" >
                 <Table className="min-w-full">
                   <TableHeader>
                     <TableRow>
