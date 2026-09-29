@@ -24,19 +24,15 @@ export function ColumnMappingDialog({
   candidateRows = [], 
   onConfirmMapping 
 }: Props) {
-  // 1. Estado para la fila del encabezado elegida
   const [selectedRowIndex, setSelectedRowIndex] = useState<string>('0');
   const [currentHeaders, setCurrentHeaders] = useState<PdfColumnHeader[]>([]);
 
-  // 2. Estados para los índices de las columnas
   const [codeCol, setCodeCol] = useState<string>('-1');
   const [nameCol, setNameCol] = useState<string>('');
   const [priceCol, setPriceCol] = useState<string>('');
 
-  // 3. Inicializar y autoseleccionar columnas cuando se cargan las candidateRows
   useEffect(() => {
     if (candidateRows.length > 0) {
-      // Intentar auto-detectar si alguna fila tiene palabras clave como "código", "descripción", "precio" o "tarifa"
       const bestIdx = candidateRows.findIndex(r => {
         const text = r.displayText.toLowerCase();
         return (
@@ -51,7 +47,6 @@ export function ColumnMappingDialog({
     }
   }, [candidateRows]);
 
-  // 4. Regenerar las opciones de columnas según la fila elegida
   const updateHeadersForRow = (rowIndex: number) => {
     const row = candidateRows[rowIndex];
     if (!row) return;
@@ -59,7 +54,6 @@ export function ColumnMappingDialog({
     const headers = buildHeadersFromSelectedRow(row.items);
     setCurrentHeaders(headers);
 
-    // Detección automática inteligente de columnas
     let autoCode = '-1';
     let autoName = '';
     let autoPrice = '';
@@ -77,7 +71,6 @@ export function ColumnMappingDialog({
       }
     });
 
-    // Fallbacks por posición si no coinciden por nombre
     if (!autoName && headers.length > 1) autoName = '1';
     if (!autoPrice && headers.length > 2) autoPrice = (headers.length - 1).toString();
 
@@ -102,28 +95,38 @@ export function ColumnMappingDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      {/* 1. overflow-hidden y ancho explícito para que el modal no se ensanche */}
+      <DialogContent className="w-full max-w-lg sm:max-w-xl overflow-hidden p-6">
         <DialogHeader>
-          <DialogTitle>Asignar Columnas del PDF</DialogTitle>
+          <DialogTitle className="text-lg font-bold">Asignar Columnas del PDF</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
-          {/* === NUEVO SELECTOR: ELECCIÓN DE LA FILA DE ENCABEZADO === */}
-          <div className="flex flex-col gap-1.5 p-2.5 rounded-md border bg-muted/30">
+        <div className="space-y-4 py-2 w-full min-w-0">
+          {/* SELECTOR DE FILA: min-w-0 y w-full obligan a respetar el contenedor */}
+          <div className="flex flex-col gap-1.5 p-3 rounded-md border bg-muted/30 w-full min-w-0">
             <label className="text-xs font-semibold text-foreground">
               Línea del Encabezado en el PDF:
             </label>
             <Select onValueChange={handleRowChange} value={selectedRowIndex}>
-              <SelectTrigger className="h-9 text-xs">
+              <SelectTrigger className="w-full min-w-0 h-9 text-xs truncate">
                 <SelectValue placeholder="Selecciona la fila..." />
               </SelectTrigger>
-              <SelectContent className="max-h-56">
+              <SelectContent className="max-h-56 max-w-[calc(100vw-40px)] sm:max-w-lg">
                 {candidateRows.map((row) => (
-                  <SelectItem key={row.rowIndex} value={row.rowIndex.toString()} className="text-xs">
-                    <span className="font-semibold text-muted-foreground mr-1">
-                      Fila #{row.rowIndex + 1}:
-                    </span>
-                    <span className="truncate">{row.displayText}</span>
+                  <SelectItem 
+                    key={row.rowIndex} 
+                    value={row.rowIndex.toString()} 
+                    className="text-xs cursor-pointer"
+                  >
+                    <div className="flex items-center min-w-0 max-w-full">
+                      <span className="font-semibold text-muted-foreground mr-1.5 shrink-0">
+                        #{row.rowIndex + 1}:
+                      </span>
+                      {/* Truncar con elipsis si la concatenación de columnas es excesiva */}
+                      <span className="truncate max-w-[340px] sm:max-w-[420px]" title={row.displayText}>
+                        {row.displayText}
+                      </span>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -134,48 +137,64 @@ export function ColumnMappingDialog({
             Indica a qué atributo corresponde cada columna de la fila seleccionada:
           </p>
 
-          {/* Columna Nombre */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold">Columna de Descripción / Nombre *:</label>
-            <Select onValueChange={setNameCol} value={nameCol}>
-              <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-              <SelectContent>
-                {currentHeaders.map(h => (
-                  <SelectItem key={h.index} value={h.index.toString()}>{h.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full min-w-0">
+            {/* Columna Nombre */}
+            <div className="flex flex-col gap-1.5 min-w-0">
+              <label className="text-xs font-semibold truncate">Descripción / Nombre *:</label>
+              <Select onValueChange={setNameCol} value={nameCol}>
+                <SelectTrigger className="w-full min-w-0 h-9 text-xs truncate">
+                  <SelectValue placeholder="Seleccionar..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {currentHeaders.map(h => (
+                    <SelectItem key={h.index} value={h.index.toString()} className="text-xs">
+                      <span className="truncate max-w-[200px]" title={h.label}>{h.label}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          {/* Columna Precio */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold">Columna de Precio *:</label>
-            <Select onValueChange={setPriceCol} value={priceCol}>
-              <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-              <SelectContent>
-                {currentHeaders.map(h => (
-                  <SelectItem key={h.index} value={h.index.toString()}>{h.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+            {/* Columna Precio */}
+            <div className="flex flex-col gap-1.5 min-w-0">
+              <label className="text-xs font-semibold truncate">Precio *:</label>
+              <Select onValueChange={setPriceCol} value={priceCol}>
+                <SelectTrigger className="w-full min-w-0 h-9 text-xs truncate">
+                  <SelectValue placeholder="Seleccionar..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {currentHeaders.map(h => (
+                    <SelectItem key={h.index} value={h.index.toString()} className="text-xs">
+                      <span className="truncate max-w-[200px]" title={h.label}>{h.label}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          {/* Columna Código */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold">Columna de Código (Opcional):</label>
-            <Select onValueChange={setCodeCol} value={codeCol}>
-              <SelectTrigger><SelectValue placeholder="Ninguna o Seleccionar..." /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="-1">-- Ninguna --</SelectItem>
-                {currentHeaders.map(h => (
-                  <SelectItem key={h.index} value={h.index.toString()}>{h.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Columna Código */}
+            <div className="flex flex-col gap-1.5 min-w-0">
+              <label className="text-xs font-semibold truncate">Código (Opcional):</label>
+              <Select onValueChange={setCodeCol} value={codeCol}>
+                <SelectTrigger className="w-full min-w-0 h-9 text-xs truncate">
+                  <SelectValue placeholder="Ninguna..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="-1" className="text-xs italic text-muted-foreground">
+                    -- Ninguna --
+                  </SelectItem>
+                  {currentHeaders.map(h => (
+                    <SelectItem key={h.index} value={h.index.toString()} className="text-xs">
+                      <span className="truncate max-w-[200px]" title={h.label}>{h.label}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="pt-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button onClick={handleConfirm} disabled={!nameCol || !priceCol}>
             Continuar al Matcheo
