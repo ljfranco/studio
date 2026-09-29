@@ -50,16 +50,16 @@ export default function AdminInventoryPage() {
                 <CardDescription>Administra tus productos, stock, precios de venta y costos de distribuidores.</CardDescription>
             </CardHeader>
             <CardContent className='px-2'>
-                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                    <TabsList className="flex w-full overflow-x-auto justify-start bg-secondary mb-6">
+                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full" >
+                    <TabsList className="flex w-full overflow-x-auto justify-start bg-primary mb-6">
                         <TabsTrigger value="inventory">
-                             <Package className="mr-2 h-4 w-4" /> Inventario
+                             <Package className="mr-2 h-4 w-4  text-white" /> Inventario
                         </TabsTrigger>
                         <TabsTrigger value="pricelist">
-                             <List className="mr-2 h-4 w-4" /> Lista de Precios
+                             <List className="mr-2 h-4 w-4 text-white" /> Lista de Precios
                         </TabsTrigger>
                         <TabsTrigger value="distributors">
-                             <Truck className="mr-2 h-4 w-4" /> Distribuidores
+                             <Truck className="mr-2 h-4 w-4  text-white" /> Distribuidores
                         </TabsTrigger>
                     </TabsList>
 
