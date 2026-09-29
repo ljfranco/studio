@@ -10,9 +10,10 @@ import { ColumnMappingDialog } from './ColumnMappingDialog';
 import { 
   parseExcel, 
   parseWord, 
-  extractPdfHeaders, 
+  getPdfCandidateRows, 
   parsePdfWithMapping, 
   PdfColumnHeader, 
+  CandidateRow,
   ExtractedItem 
 } from '@/lib/documentParsers';
 import { matchItemsWithCatalog } from '@/lib/matcher';
@@ -28,9 +29,9 @@ export default function SmartUpdateBtn({ myProducts = [], distributors = [] }: a
   const [showPreview, setShowPreview] = useState(false);
   const [pendingUpdates, setPendingUpdates] = useState<any[]>([]);
 
-  // Estados para ColumnMappingDialog (mapeo del PDF)
+  // Estados para ColumnMappingDialog (filas candidatas del PDF)
   const [showMapping, setShowMapping] = useState(false);
-  const [pdfHeaders, setPdfHeaders] = useState<PdfColumnHeader[]>([]);
+  const [candidateRows, setCandidateRows] = useState<CandidateRow[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   // 1. Selector de archivo principal
@@ -40,18 +41,19 @@ export default function SmartUpdateBtn({ myProducts = [], distributors = [] }: a
 
     const extension = file.name.split('.').pop()?.toLowerCase();
 
-    // SI ES PDF: Pausamos y pedimos el mapeo de columnas
+    // SI ES PDF: Extraemos las primeras filas para que el usuario elija el encabezado en el modal
     if (extension === 'pdf') {
       try {
         setLoading(true);
-        toast({ title: "Analizando PDF", description: "Detectando columnas del documento..." });
+        toast({ title: "Analizando PDF", description: "Leyendo la estructura del documento..." });
         
-        const headers = await extractPdfHeaders(file);
+        // Obtenemos las primeras 10 filas de la primera página
+        const rows = await getPdfCandidateRows(file, 10);
         
-        if (headers.length === 0) {
+        if (rows.length === 0) {
           toast({ 
             title: "Error de lectura", 
-            description: "No se detectaron columnas legibles en la primera página.", 
+            description: "No se detectaron líneas de texto legibles en la primera página.", 
             variant: "destructive" 
           });
           setLoading(false);
@@ -59,10 +61,10 @@ export default function SmartUpdateBtn({ myProducts = [], distributors = [] }: a
         }
 
         setSelectedFile(file);
-        setPdfHeaders(headers);
-        setShowMapping(true); // <--- AQUÍ SE LEVANTA EL MODAL DE ASIGNACIÓN
+        setCandidateRows(rows);
+        setShowMapping(true); // Abre ColumnMappingDialog con el selector de fila
       } catch (err) {
-        console.error("Error al extraer cabezales PDF:", err);
+        console.error("Error al inspeccionar PDF:", err);
         toast({ title: "Error", description: "No se pudo leer la estructura del PDF.", variant: "destructive" });
       } finally {
         setLoading(false);
@@ -92,14 +94,17 @@ export default function SmartUpdateBtn({ myProducts = [], distributors = [] }: a
     }
   };
 
-  // 2. Callback cuando el usuario confirma el mapeo en ColumnMappingDialog
-  const handleConfirmMapping = async (mapping: { codeIndex: number; nameIndex: number; priceIndex: number }) => {
+  // 2. Callback cuando el usuario confirma la fila y columnas en ColumnMappingDialog
+  const handleConfirmMapping = async (
+    headers: PdfColumnHeader[],
+    mapping: { codeIndex: number; nameIndex: number; priceIndex: number }
+  ) => {
     if (!selectedFile) return;
 
     setLoading(true);
     try {
       toast({ title: "Procesando", description: "Extrayendo productos según las columnas elegidas..." });
-      const extracted = await parsePdfWithMapping(selectedFile, pdfHeaders, mapping);
+      const extracted = await parsePdfWithMapping(selectedFile, headers, mapping);
       runMatching(extracted);
     } catch (err) {
       console.error("Error procesando con mapeo:", err);
@@ -110,7 +115,7 @@ export default function SmartUpdateBtn({ myProducts = [], distributors = [] }: a
     }
   };
 
-  // 3. Función común para conciliar con tu inventario
+  // 3. Función común para conciliar contra el catálogo (lib/matcher.ts)
   const runMatching = (extracted: ExtractedItem[]) => {
     if (extracted.length === 0) {
       toast({ title: "Sin datos", description: "No se encontraron productos y precios válidos.", variant: "destructive" });
@@ -202,11 +207,11 @@ export default function SmartUpdateBtn({ myProducts = [], distributors = [] }: a
         </label>
       </Button>
 
-      {/* Modal 1: Mapeo de columnas para PDFs */}
+      {/* Modal 1: Mapeo de columnas con selector visual de encabezado */}
       <ColumnMappingDialog 
         open={showMapping}
         onOpenChange={setShowMapping}
-        headers={pdfHeaders}
+        candidateRows={candidateRows}
         onConfirmMapping={handleConfirmMapping}
       />
 

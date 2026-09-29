@@ -15,6 +15,98 @@ export interface PdfColumnHeader {
   xEnd: number;
 }
 
+export interface CandidateRow {
+  rowIndex: number;
+  y: number;
+  displayText: string;
+  items: Array<{ x: number; text: string; width: number }>;
+}
+
+export async function getPdfCandidateRows(file: File, maxRows: number = 8): Promise<CandidateRow[]> {
+  const pdfjsLib = await import('pdfjs-dist/build/pdf.mjs');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const firstPage = await pdf.getPage(1);
+  const content = await firstPage.getTextContent();
+
+  // 1. Agrupar ítems por coordenada Y (tolerancia elástica de 4px)
+  const rowsByY: Record<number, Array<{ x: number; text: string; width: number }>> = {};
+  for (const item of content.items as any[]) {
+    const text = item.str.trim();
+    if (!text) continue;
+
+    const y = Math.round(item.transform[5] / 4) * 4;
+    const x = item.transform[4];
+    const width = item.width || 0;
+
+    if (!rowsByY[y]) rowsByY[y] = [];
+    rowsByY[y].push({ x, text, width });
+  }
+
+  // 2. Ordenar de arriba a abajo
+  const sortedY = Object.keys(rowsByY).sort((a, b) => Number(b) - Number(a));
+
+  // 3. Tomar las primeras N filas que tengan al menos 2 elementos
+  const candidates: CandidateRow[] = [];
+  for (const y of sortedY) {
+    const rowItems = rowsByY[Number(y)].sort((a, b) => a.x - b.x);
+    if (rowItems.length < 2) continue; // Descarta títulos aislados de una sola palabra
+
+    candidates.push({
+      rowIndex: candidates.length,
+      y: Number(y),
+      displayText: rowItems.map(i => i.text).join(' | '),
+      items: rowItems
+    });
+
+    if (candidates.length >= maxRows) break;
+  }
+
+  return candidates;
+}
+
+/**
+ * Convierte la fila elegida por el usuario en el formato PdfColumnHeader[] requerido por el parser
+ */
+export function buildHeadersFromSelectedRow(selectedItems: Array<{ x: number; text: string; width: number }>): PdfColumnHeader[] {
+  const headers: PdfColumnHeader[] = [];
+  let currentLabel = '';
+  let startX = -1;
+  let lastRight = -1;
+
+  for (const item of selectedItems) {
+    // Si la distancia horizontal es menor a 6px, pertenece a la misma columna (ej. "Tarifa" + "1+IVA")
+    if (lastRight !== -1 && item.x - lastRight < 6) {
+      currentLabel += ' ' + item.text;
+      lastRight = item.x + item.width;
+    } else {
+      if (currentLabel) {
+        headers.push({
+          index: headers.length,
+          label: currentLabel.trim(),
+          xStart: startX,
+          xEnd: lastRight,
+        });
+      }
+      currentLabel = item.text;
+      startX = item.x;
+      lastRight = item.x + item.width;
+    }
+  }
+
+  if (currentLabel) {
+    headers.push({
+      index: headers.length,
+      label: currentLabel.trim(),
+      xStart: startX,
+      xEnd: lastRight,
+    });
+  }
+
+  return headers;
+}
 export async function extractPdfHeaders(file: File): Promise<PdfColumnHeader[]> {
   const pdfjsLib = await import('pdfjs-dist/build/pdf.mjs');
   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;

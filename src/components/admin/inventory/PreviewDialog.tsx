@@ -72,8 +72,8 @@ export function PreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[88vh] flex flex-col p-6">
-        <DialogHeader className="pb-2">
+      <DialogContent className="max-w-5xl h-[88vh] flex flex-col p-6">
+        <DialogHeader className="pb-2 flex-shrink-0">
           <DialogTitle className="text-xl font-bold">
             Verificar conciliación de precios y productos
           </DialogTitle>
@@ -82,10 +82,11 @@ export function PreviewDialog({
           </p>
         </DialogHeader>
 
-        <div className="overflow-y-auto flex-1 border rounded-md my-2 shadow-sm">
-          <Table>
-            {/* CABECERA CON ALTO CONTRASTE */}
-            <TableHeader className="sticky top-0 bg-slate-900 text-slate-100 dark:bg-slate-800 z-10">
+        {/* CONTENEDOR CON SCROLL ÚNICO Y ALTURA DELIMITADA */}
+        <div className="relative flex-1 min-h-0 overflow-y-auto border rounded-md my-2 shadow-sm [&>div]:overflow-visible">
+          <Table className="relative w-full border-collapse">
+            {/* CABECERA FIJA: Delega sticky y fondo opaco a cada th hijo */}
+            <TableHeader className="sticky top-0 z-30 shadow-sm [&_th]:sticky [&_th]:top-0 [&_th]:bg-slate-900 dark:[&_th]:bg-slate-800">
               <TableRow className="hover:bg-transparent border-slate-700">
                 <TableHead className="w-10 text-slate-100">
                   <Checkbox 
@@ -138,7 +139,7 @@ export function PreviewDialog({
                       />
                     </TableCell>
 
-                    {/* PRODUCTO DETECTADO EN ARCHIVO (Tamaño de fuente aumentado: text-sm) */}
+                    {/* PRODUCTO DETECTADO EN ARCHIVO */}
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         <span className="font-semibold text-sm text-foreground leading-snug">
@@ -163,7 +164,7 @@ export function PreviewDialog({
                       </div>
                     </TableCell>
 
-                    {/* PRODUCTO DEL CATÁLOGO (Tamaño de fuente aumentado: text-sm) */}
+                    {/* PRODUCTO DEL CATÁLOGO */}
                     <TableCell>
                       <div className="flex flex-col">
                         <span className="font-medium text-md text-foreground leading-snug">
@@ -176,27 +177,26 @@ export function PreviewDialog({
                     </TableCell>
 
                     {/* Precio Actual */}
-                    <TableCell className="text-right text-md text-slate-50 font-medium tabular-nums">
+                    <TableCell className="text-right text-md text-muted-foreground font-medium tabular-nums">
                       {currentPrice > 0 ? `$ ${currentPrice.toLocaleString()}` : <span className="italic text-md">Sin Dato</span>}
                     </TableCell>
 
                     <TableCell className="text-center p-0">
-                      <ArrowRight className="h-4 w-4 text-slate-50 mx-auto" />
+                      <ArrowRight className="h-4 w-4 text-muted-foreground/40 mx-auto" />
                     </TableCell>
 
-                    {/* Nuevo Precio en tamaño Grande */}
-                    <TableCell className="text-right font-black text-md text-slate-50 tracking-tight tabular-nums">
+                    {/* Nuevo Precio */}
+                    <TableCell className="text-right font-black text-md text-foreground tracking-tight tabular-nums">
                       $ {update.newPrice.toLocaleString()}
                     </TableCell>
 
-                    {/* BADGE DE VARIACIÓN CON REGLA ESTRICTA DE COLORES */}
+                    {/* BADGE DE VARIACIÓN */}
                     <TableCell className="text-center">
                       {currentPrice === 0 ? (
                         <Badge variant="secondary" className="text-[12px] bg-slate-100 text-slate-700 border">
                           Nuevo
                         </Badge>
                       ) : percentage > 1 ? (
-                        // Aumento (> 1%): ROJO
                         <Badge 
                           variant="outline" 
                           className="text-[12px] font-semibold bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-900"
@@ -204,7 +204,6 @@ export function PreviewDialog({
                           +{percentage.toFixed(1)}%
                         </Badge>
                       ) : percentage < -1 ? (
-                        // Baja (< -1%): VERDE
                         <Badge 
                           variant="outline" 
                           className="text-[12px] font-semibold bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900"
@@ -212,7 +211,6 @@ export function PreviewDialog({
                           {percentage.toFixed(1)}%
                         </Badge>
                       ) : (
-                        // Estable entre -1% y 1%: GRIS
                         <Badge 
                           variant="secondary" 
                           className="text-[12px] font-medium bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700"
@@ -228,7 +226,7 @@ export function PreviewDialog({
           </Table>
         </div>
 
-        <DialogFooter className="pt-2 flex items-center justify-between sm:justify-between w-full">
+        <DialogFooter className="pt-2 flex-shrink-0 flex items-center justify-between sm:justify-between w-full">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Descartar
           </Button>

@@ -382,7 +382,7 @@ const PriceListTable: React.FC = () => {
         <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between flex-wrap gap-4">
           <div className="space-y-1">
             <CardTitle className="text-2xl font-bold tracking-tight">Lista de Precios</CardTitle>
-            <CardDescription>Gestión inteligente de precios y comparación con proveedores.</CardDescription>
+            <CardDescription>Gestión de precios y comparación con proveedores.</CardDescription>
           </div>
           
           <div className="flex flex-col gap-4 w-full sm:w-auto">
